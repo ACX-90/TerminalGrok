@@ -1,5 +1,9 @@
 import time
 import os
+import json
+import html
+import subprocess
+import agent_tools
 # use clash as system proxy and it's a socks -> socks5 fix
 os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7890'
 os.environ['all_proxy'] = 'socks5://127.0.0.1:7890'
@@ -13,12 +17,13 @@ from openai import (
 # prepare global variables
 workspace = os.getenv('grok_workspace')
 username = os.getenv('USERNAME')
-with open("grok.token", "r") as f:
+with open(f"{workspace}/grok.token", "r") as f:
     api_key = f.read().rstrip(' \n')
     if api_key.startswith("#error"):
         print("Error: you API is invalid")
         exit(-1) 
 mem_file = f"{workspace}/memories.txt"
+debug = 1
 
 # setup openrouter client, or other vendors
 try:
@@ -43,8 +48,13 @@ model = "x-ai/grok-4.1-fast"
 default_message = [
     {
         "role": "system",
-        "content": "<role>You are Grok, an assistant live in Ubuntu terminal.</role>"
-                   "<style>Your reply use only ASCII, no emoji, be short and precise, humor.</style>"
+        "content": "<role>You are Grok, an assistant live in Ubuntu terminal.</role>\n"
+                   "<style>Your reply use only ASCII, no emoji, be short and precise, humor.</style>\n"
+                   "<help>You can use bash tools to help the user when necessary.\n"
+                   "you may need to finish task by multiple steps.\n"
+                   "when returncode is 0 you can continue.\n"
+                   "when returncode is not 0 you must analyze reason and decide what to do next\n"
+                   "when user reject this tool call you must stop using tools.</help>\n"
     },
     {
         "role": "assistant",
@@ -55,19 +65,34 @@ default_message = [
         "content": f"<action>Now say greetings to the user {username}.</action>"
     }, 
 ]
+tools = [
+    agent_tools.bash
+    #agnet_tools.file_edit
+]
+
 save_message = []
 messages = default_message
-cnt = 0
-
+initial = 1
+tool_active = 0
+current_tools = 0
+tool_result = ''
 while True:
-    # user input   
-    if cnt == 0:
+    # print hint
+    if initial == 1:
+        initial = 0
+        print(f"/r: Reset session    /q: Quit    /m: Save memory    /cm: Clear memory")
+        print(f"/e: Execute bash")
         messages = default_message
+    elif tool_active:
+        tool_active = 0
+        current_tools = tools
     else:
+        current_tools = 0
+        tool_active = 0
         x = input()
         match x.lower():
             case '/r':
-                cnt = 0
+                initial = 1
                 continue
             case '/q':
                 break
@@ -80,20 +105,27 @@ while True:
                 with open(mem_file, 'w', encoding="utf-8") as f:
                     f.write('')
                 continue
+        if x.startswith('/e '):
+            # example: /e output asdwerasdwer to file test.txt
+            current_tools = tools
+            tool_active = 1
+            x = x[3::]
         messages.append({"role":"user", "content": x})
         save_message.append(f"<user>{x}</user>\n")
-    
-    # print hint
-    if cnt == 0:
-        print(f"/r: Reset session    /q: Quit    /m: Save memory    /cm: Clear memory")
-        print(f"/e: Execute bash")
         
     # make conversation
     try:
+        if debug:
+            print("Grok is thinking...")
         completion = client.chat.completions.create(
             model=model,
             messages=messages,
+            tools=current_tools,
+            tool_choice="auto" if current_tools else 0,
+            temperature=0.0 if current_tools else 1.0,
         )
+        if debug:
+            print('Grok made a repy:')
     except Exception as e:
         if isinstance(e, AuthenticationError):
             print("Error: Invalid API KEY")
@@ -109,16 +141,50 @@ while True:
     
     # format output
     reply = completion.choices[0].message
-    print_content = reply.content.rstrip("\n$")
-    print(f"\nGrok: {print_content}", end='\n$')
     messages.append(reply)
-    save_message.append(f"<assistant>{reply.content}</assistant>\n")
+    if reply.tool_calls:
+        for tool_call in reply.tool_calls:
+            # print(tool_call.to_json())
+            if tool_call.function.name == "bash":
+                tool_active = 1
+                # print(tool_call.function.arguments)
+                args = json.loads(tool_call.function.arguments)
+                agent_cmd = args.get("command")
+                # DECODE HTML entities if Grok accidentally encodes them
+                agent_cmd = html.unescape(agent_cmd)
+                save_message.append(f"<assistant>tool=bash, cmd=\n{agent_cmd}\n</assistant>\n")
+                print("\n" + "="*60)
+                print("COMMAND TO EXECUTE:")
+                print("-"*60)
+                print(agent_cmd)
+                print("="*60)
+                print("Execute? (y/n): ", end="", flush=True)
+                a = ''#input()
+                if not a or a.lower().startswith('y'):
+                    ret = subprocess.run(agent_cmd,
+                        text=True,
+                        shell=True,
+                        capture_output=True)
+                    if ret.returncode:
+                        tool_result = f"returncode={ret.returncode}, stderr={ret.stderr}"
+                    else:
+                        tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}"
+                else:
+                    tool_result = "returncode=-1, stderr=user reject this tool call"
+                print(tool_result)
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
+                save_message.append(f"<tool_result>{tool_result}</tool_result>\n")
+                continue # 
+    elif reply.content:
+        save_message.append(f"<assistant>{reply.content}</assistant>\n")
+        print_content = reply.content.rstrip("\n$")
+        print(f"\nGrok: {print_content}", end='\n$')
     
     # avoid conversation too long
     if len(messages) > 40:
         messages = messages[:2] + messages[-35:]
         save_message = save_message[-35:]
-    cnt += 1
+    
 
 
 

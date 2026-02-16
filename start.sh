@@ -28,10 +28,10 @@ if [ ! -d "${workspace}" ]; then
 fi
 
 if [[ ${PWD} != ${workspace} ]] then
-    cp main.py "${workspace}/main.py"
-    cp start.sh "${workspace}/start.sh"
+    cp *.py "${workspace}/"
+    cp start.sh "${workspace}/"
 fi
-  
+
 if [ ! -d "${workspace}/venv" ]; then
     echo "Setup Python"
     python3.12 -m venv "${workspace}/venv"
@@ -41,6 +41,6 @@ if [ ! -d "${workspace}/venv" ]; then
 fi
  
 echo "Start Grok"
-
+cd "${workspace}"
 "${workspace}/venv/bin/python" "${workspace}/main.py"
 
