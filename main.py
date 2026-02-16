@@ -66,8 +66,8 @@ default_message = [
     }, 
 ]
 tools = [
-    agent_tools.bash
-    #agnet_tools.file_edit
+    agent_tools.bash,
+    # agent_tools.file_edit
 ]
 
 save_message = []
@@ -109,7 +109,7 @@ while True:
             # example: /e output asdwerasdwer to file test.txt
             current_tools = tools
             tool_active = 1
-            x = x[3::]
+            x = x[3:]
         messages.append({"role":"user", "content": x})
         save_message.append(f"<user>{x}</user>\n")
         
@@ -130,7 +130,7 @@ while True:
         if isinstance(e, AuthenticationError):
             print("Error: Invalid API KEY")
             data = "#error: " + api_key
-            with open("{workspace}/grok.token", "w") as f:
+            with open(f"{workspace}/grok.token", "w") as f:
                 f.write(data)
             print(f"Please modify {workspace}/grok.token and reset your API KEY\n")
             exit(-1)
@@ -165,10 +165,7 @@ while True:
                         text=True,
                         shell=True,
                         capture_output=True)
-                    if ret.returncode:
-                        tool_result = f"returncode={ret.returncode}, stderr={ret.stderr}"
-                    else:
-                        tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}"
+                    tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}, stderr={ret.stderr}"
                 else:
                     tool_result = "returncode=-1, stderr=user reject this tool call"
                 print(tool_result)
