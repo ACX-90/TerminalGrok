@@ -16,14 +16,10 @@ workspace="/home/${USERNAME}/TerminalGrok"
 export grok_workspace="${workspace}"
 
 # enter API key
-if [ ! "${OPENROUTER_API_KEY}" ]; then
+if [ ! -f "${workspace}/grok.token" ]; then
     read -p "Enter your OPENROUTER_API_KEY: " api_key
-    export OPENROUTER_API_KEY="${api_key}"
-    echo "export OPENROUTER_API_KEY=\"${api_key}\"" >> ~/.bashrc
-    source ~/.bashrc
-    echo "Your API KEY is: ${OPENROUTER_API_KEY}"
-else
-    echo "API_KEY Found"
+    echo ${api_key} > grok.token
+    echo "Your API KEY saves in ${workspace}/grok.token"
 fi
 
 if [ ! -d "${workspace}" ]; then
@@ -31,17 +27,17 @@ if [ ! -d "${workspace}" ]; then
     mkdir "${workspace}"
 fi
 
-cp main.py "${workspace}/main.py"
-cp start.sh "${workspace}/start.sh"
-    
+if [[ ${PWD} != ${workspace} ]] then
+    cp main.py "${workspace}/main.py"
+    cp start.sh "${workspace}/start.sh"
+fi
+  
 if [ ! -d "${workspace}/venv" ]; then
     echo "Setup Python"
     python3.12 -m venv "${workspace}/venv"
     "${workspace}/venv/bin/pip" install openai
     "${workspace}/venv/bin/pip" install "httpx[socks]"
     echo "Python virtual environment done"
-else
-    echo "Python virtual environment found"
 fi
  
 echo "Start Grok"
