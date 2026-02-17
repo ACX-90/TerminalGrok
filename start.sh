@@ -18,7 +18,7 @@ export grok_workspace="${workspace}"
 # enter API key
 if [ ! -f "${workspace}/grok.token" ]; then
     read -p "Enter your OPENROUTER_API_KEY: " api_key
-    echo ${api_key} > grok.token
+    echo ${api_key} > ${workspace}/grok.token
     echo "Your API KEY saves in ${workspace}/grok.token"
 fi
 

@@ -8,16 +8,22 @@ bash = {
                             - Use && not &amp; &amp;
                             - Use | not &pipe;
                             - Use " not &quot; 
+                            - **NEVER use cd, Use only absolute path**
+                            - **NEVER use && and other command after EOF**
                             NEVER HTML-encode the command string. Output raw bash syntax only.""",
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "think": {
+                        "type": "string",
+                        "description": "You must think carefully what's the best bash command to do, **you must do it step by step**, check previous result every step, **you must not output dangerous bash command**, write your thoughts",
+                    },
                     "command": {
                         "type": "string",
                         "description": "Raw bash command with proper shell syntax (no HTML encoding)"
                     }
                 },
-                "required": ["command"]
+                "required": ["think", "command"]
             }
         }
     }
