@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableDelayedExpansion
 
 set "workspace=E:\_Workspace\TerminalGrok"
 
@@ -21,10 +22,12 @@ if not %cd% equ %workspace% (
     xcopy "*.bat" "%workspace%\" /q /y
 )
 
-::xcopy "grok.bat" "C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312" /q /y
+set "target=grok.bat"
+powershell -Command "(Get-Content '%target%') -replace '^set \"workspace=.*\"$', 'set \"workspace=%workspace%\"' | Set-Content '%target%'"
+xcopy "%target%" "C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312" /q /y
 
 echo Start Grok
 cd %workspace%
 %workspace%\venv\Scripts\python %workspace%\main.py
-pause
 
+pause

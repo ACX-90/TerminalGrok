@@ -24,7 +24,7 @@ except FileNotFoundError:
 msg_system = {
         "role": "system",
         "content": f"<role>You are Grok, an assistant live in {os_type} terminal.</role>\n"
-                   "<style>Your reply use only ASCII, no emoji, be short and precise, humor.</style>\n"
+                   "<style>**Your reply MUST use only ASCII, no emoji**, be short and precise, humor.</style>\n"
                    f"<workspace>**Your workspace is {sandbox}, you must only operate file inside and in it's sub directories**</workspace>\n"
                    "<help>You can use batch tools to help the user when necessary.\n"
                    "**you must not do more than 2 things in one batch command, try step by step**\n"
@@ -50,13 +50,13 @@ tool_bat = {
         "type": "function",
         "function": {
             "name": "batch",
-            "description": """Execute Windows Batch commands in the user's terminal. 
+            "description": f"""Execute Windows Batch commands in the user's terminal. 
                             CRITICAL: Generate commands with RAW Windows Batch syntax:
                             - Use < > not &lt; &gt;
                             - Use && not &amp; &amp;
                             - Use | not &pipe;
                             - Use " not &quot; 
-                            - **NEVER use cd, Use only absolute path**
+                            - **NEVER use cd, Use only absolute path starts with {sandbox}**
                             - **NEVER use && and other command after EOF**
                             NEVER HTML-encode the command string. Output raw Windows Batch syntax only.""",
             "parameters": {
@@ -82,13 +82,13 @@ tool_bash = {
         "type": "function",
         "function": {
             "name": "batch",
-            "description": """Execute bash commands in the user's terminal. 
+            "description": f"""Execute bash commands in the user's terminal. 
                             CRITICAL: Generate commands with RAW shell syntax:
                             - Use < > not &lt; &gt;
                             - Use && not &amp; &amp;
                             - Use | not &pipe;
                             - Use " not &quot; 
-                            - **NEVER use cd, Use only absolute path**
+                            - **NEVER use cd, Use only absolute path starts with {sandbox}**
                             - **NEVER use && and other command after EOF**
                             NEVER HTML-encode the command string. Output raw bash syntax only.""",
             "parameters": {
