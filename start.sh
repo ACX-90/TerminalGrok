@@ -12,8 +12,7 @@ export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
 
 # general
-workspace="/home/${USERNAME}/TerminalGrok"
-export grok_workspace="${workspace}"
+export workspace="/home/${USERNAME}/TerminalGrok"
 
 # enter API key
 if [ ! -f "${workspace}/grok.token" ]; then
@@ -29,7 +28,7 @@ fi
 
 if [[ ${PWD} != ${workspace} ]] then
     cp *.py "${workspace}/"
-    cp start.sh "${workspace}/"
+    cp *.sh "${workspace}/"
 fi
 
 if [ ! -d "${workspace}/venv" ]; then

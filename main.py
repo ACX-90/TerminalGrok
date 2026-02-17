@@ -3,7 +3,7 @@ import os
 import json
 import html
 import subprocess
-import agent_tools
+import agent_cfg
 # use clash as system proxy and it's a socks -> socks5 fix
 os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7890'
 os.environ['all_proxy'] = 'socks5://127.0.0.1:7890'
@@ -15,66 +15,35 @@ from openai import (
 )
 
 # prepare global variables
-workspace = os.getenv('grok_workspace')
-sandbox = f"{workspace}/sandbox"
-username = os.getenv('USERNAME')
-with open(f"{workspace}/grok.token", "r") as f:
-    api_key = f.read().rstrip(' \n')
-    if api_key.startswith("#error"):
-        print("Error: you API is invalid")
-        exit(-1)
-    
-mem_file = f"{workspace}/memories.txt"
 debug = 0
 
 # setup openrouter client, or other vendors
 try:
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        #base_url="https://api.x.ai/v1",
-        api_key=api_key,
+        # base_url="https://api.x.ai/v1",
+        api_key=agent_cfg.api_key,
     )
 except Exception as e:
     print("OpenAI socks fail")
     print(e)
     exit(-1)
 
-# read previous memories
-try:
-    with open(mem_file, "r", encoding="utf-8") as f:
-        memories = f.read()
-except FileNotFoundError:
-    memories = "No previous conversation"
+
 
 # model and prompts
-model = "x-ai/grok-4.1-fast" # from openrouter
-#model = "grok-4-1-fast-reasoning" # from xAI
+model = "x-ai/grok-4.1-fast"        # from openrouter
+# model = "grok-4-1-fast-reasoning" # from xAI
 default_message = [
-    {
-        "role": "system",
-        "content": "<role>You are Grok, an assistant live in Ubuntu terminal.</role>\n"
-                   "<style>Your reply use only ASCII, no emoji, be short and precise, humor.</style>\n"
-                   "<workspace>**Your workspace is {sandbox}, you must only operate file inside and in it's sub directories**</workspace>\n"
-                   "<help>You can use bash tools to help the user when necessary.\n"
-                   "**you must not do more than 2 things in one bash command, try step by step**\n"
-                   "when returncode is 0 you can continue.\n"
-                   "when returncode is not 0 you must analyze reason and decide what to do next\n"
-                   "when user reject this tool call you must find a correct way to use tools</help>\n"
-    },
-    {
-        "role": "assistant",
-        "content": f"<memory>{memories}</memory>"
-    },
-    {
-        "role": "system",
-        "content": f"<action>Now say greetings to the user {username}.</action>"
-    }, 
+    agent_cfg.msg_system,       # 0, must be preserved
+    agent_cfg.msg_mems,         # 1, must be preserved
+    agent_cfg.msg_hello,        # 2, can be dropped
 ]
 tools = [
-    agent_tools.bash,
-    # agent_tools.file_edit
+    agent_cfg.tool_batch,
 ]
 
+confirm_need = 1
 save_message = []
 messages = default_message
 initial = 1
@@ -86,7 +55,7 @@ while True:
     if initial == 1:
         initial = 0
         print(f"/r: Reset session    /q: Quit    /m: Save memory    /cm: Clear memory")
-        print(f"/e: Execute bash")
+        print(f"/b: Grok Batch  /c: Confirm Need  /n: NoConfirm")
         messages = default_message
     elif tool_active:
         tool_active = 0
@@ -98,20 +67,31 @@ while True:
         match x.lower():
             case '/r':
                 initial = 1
+                print("$", end=' ')
                 continue
             case '/q':
                 break
             case '/m':
-                with open(mem_file, 'a', encoding="utf-8") as f:
+                with open(agent_cfg.mem_file, 'a', encoding="utf-8") as f:
                     f.write("".join(save_message))
                 save_message = []
+                print("$", end=' ')
                 continue
             case '/cm':
-                with open(mem_file, 'w', encoding="utf-8") as f:
+                with open(agent_cfg.mem_file, 'w', encoding="utf-8") as f:
                     f.write('')
+                print("$", end=' ')
                 continue
-        if x.startswith('/e '):
-            # example: /e output asdwerasdwer to file test.txt
+            case '/c':
+                confirm_need = 1
+                print("$", end=' ')
+                continue
+            case '/n':
+                confirm_need = 0
+                print("$", end=' ')
+                continue
+        if x.startswith('/b '):
+            # example: /b output asdwerasdwer to file test.txt
             current_tools = tools
             tool_active = 1
             x = x[3:]
@@ -135,10 +115,10 @@ while True:
         if isinstance(e, AuthenticationError):
             print(e)
             print("Error: Invalid API KEY")
-            data = "#error: " + api_key
-            with open(f"{workspace}/grok.token", "w") as f:
+            data = "#error: " + agent_cfg.api_key
+            with open(f"{agent_cfg.workspace}/grok.token", "w") as f:
                 f.write(data)
-            print(f"Please modify {workspace}/grok.token and reset your API KEY\n")
+            print(f"Please modify {agent_cfg.workspace}/grok.token and reset your API KEY\n")
             exit(-1)
         else:
             print(e)
@@ -151,7 +131,7 @@ while True:
     if reply.tool_calls:
         for tool_call in reply.tool_calls:
             # print(tool_call.to_json())
-            if tool_call.function.name == "bash":
+            if tool_call.function.name == "batch":
                 tool_active = 1
                 # print(tool_call.function.arguments)
                 args = json.loads(tool_call.function.arguments)
@@ -160,7 +140,7 @@ while True:
 
                 # DECODE HTML entities if Grok accidentally encodes them
                 agent_cmd = html.unescape(agent_cmd)
-                save_message.append(f"<assistant>tool=bash, cmd=\n{agent_cmd}\n</assistant>\n")
+                save_message.append(f"<assistant>tool=batch, cmd=\n{agent_cmd}\n</assistant>\n")
                 print("\n" + "="*60)
                 print(f"Grok's thought: {agent_thk}")
                 print("-"*60)
@@ -168,13 +148,14 @@ while True:
                 print("-"*60)
                 print(agent_cmd)
                 print("="*60)
-                print("Execute? (y/n): ", end="", flush=True)
-                a = input()
+                print("Execute? (y/no and reasons): ", end="", flush=True)
 
-                # force run in sandbox
-                agent_cmd = f'cd {sandbox} && ' + agent_cmd
+                if confirm_need:
+                    confirm_info = input()
+                else:
+                    confirm_info = ''
 
-                if not a or a.lower().startswith('y'):
+                if not confirm_info or confirm_info.lower().startswith('y'):
                     ret = subprocess.run(agent_cmd,
                         text=True,
                         shell=True,
@@ -182,7 +163,7 @@ while True:
                     tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}, stderr={ret.stderr}"
                 else:
                     tool_result = f"returncode=-1, stderr=user temporarily declined tool call once."\
-                                  f"reason: **{a}**."\
+                                  f"reason: **{confirm_info}**."\
                                   f"you need to think why you did it wrong."\
                                   f"try to use a correct alternative."
                 print(tool_result)
@@ -192,7 +173,7 @@ while True:
     elif reply.content:
         save_message.append(f"<assistant>{reply.content}</assistant>\n")
         print_content = reply.content.rstrip("\n$")
-        print(f"{'-'*60}\nGrok: {print_content}", end=f'\n{'-'*60}\n$')
+        print(f"{'-'*60}\nGrok: {print_content}", end=f'\n{'-'*60}\n$ ')
     
     # avoid conversation too long
     if len(messages) > 40:

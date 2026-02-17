@@ -1,3 +1,4 @@
 memories.txt
 venv
-grok.token
+*.token
+*.grok
