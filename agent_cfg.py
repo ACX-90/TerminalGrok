@@ -1,113 +1,156 @@
 import os
 import sys
 
-os_type = os.getenv('run_enviroment')
+os_type = os.getenv('run_environment')
 workspace = os.getenv('workspace')
 sandbox = f"{workspace}/sandbox"
 username = os.getenv('USERNAME')
 
-# get API Key
-with open(f"{workspace}/grok.token", "r") as f:
-    api_key = f.read().rstrip(' \n')
-    if api_key.startswith("#error"):
-        print("Error: you API is invalid")
+# --- Load API token ---
+grok_token_file = f"{workspace}/token/grok.token"
+with open(grok_token_file, "r") as f:
+    grok_token = f.read().rstrip(' \n')
+    if grok_token.startswith("#error"):
+        print("Error: your API key is invalid.")
         exit(-1)
 
-# read previous memories
+# --- Load previous memories ---
 mem_file = f"{workspace}/memories.txt"
 try:
     with open(mem_file, "r", encoding="utf-8") as f:
         memories = f.read()
 except FileNotFoundError:
-    memories = "No previous conversation"
-    
+    memories = "No previous conversation."
+
+# --- System prompt ---
 msg_system = {
-        "role": "system",
-        "content": f"<role>You are Grok, an assistant live in {os_type} terminal.</role>\n"
-                   "<style>**Your reply MUST use only ASCII, no emoji**, be short and precise, humor.</style>\n"
-                   f"<workspace>**Your workspace is {sandbox}, you must only operate file inside and in it's sub directories**</workspace>\n"
-                   "<help>You can use batch tools to help the user when necessary.\n"
-                   "**you must not do more than 2 things in one batch command, try step by step**\n"
-                   "when returncode is 0 you can continue.\n"
-                   "when returncode is not 0 you must analyze reason and decide what to do next\n"
-                   "when user reject this tool call you must find a correct way to use tools</help>\n"
-    }
+    "role": "system",
+    "content": (
+        f"You are Grok, a terminal assistant running on {os_type}.\n"
+        f"The user's name is {username}. Greet them at the start of the conversation.\n\n"
+        f"<memory>\n{memories}\n</memory>\n\n"
+        "**Rules you must follow**:\n"
+        "- ASCII only, no emoji. Keep responses short, precise, with mild humor.\n"
+        f"- Workspace is strictly limited to {sandbox} and its subdirectories. NEVER access paths outside this.\n"
+        "- Use the `batch` tool ONLY for read-only operations: directory listing, reading file content, "
+        "simple checks, environment queries, and other non-destructive actions.\n"
+        "- NEVER use `batch` to create, modify, append, overwrite, or delete file contents.\n"
+        "- ALL file content changes must be done exclusively via the `fileio` tool.\n"
+        "- One `batch` call = at most 1-2 simple actions. Think step by step.\n"
+        "- On non-zero return code: analyze the error and decide the next step.\n"
+        "- If the user forbids a tool: find an alternative or explain why the task is impossible."
+    )
+}
 
-# print(msg_system)
-# exit(-1)
+# --- Tool definitions ---
 
-msg_mems = {
-        "role": "assistant",
-        "content": f"<memory>{memories}</memory>"
-    }
-
-msg_hello = {
-        "role": "system",
-        "content": f"<action>Now say greetings to the user {username}.</action>"
-    }
-
-tool_bat = {
+# Select batch tool based on platform
+if sys.platform.lower().__contains__("win"):
+    tool_batch = {
         "type": "function",
         "function": {
             "name": "batch",
-            "description": f"""Execute Windows Batch commands in the user's terminal. 
-                            CRITICAL: Generate commands with RAW Windows Batch syntax:
-                            - Use < > not &lt; &gt;
-                            - Use && not &amp; &amp;
-                            - Use | not &pipe;
-                            - Use " not &quot; 
-                            - **NEVER use cd, Use only absolute path starts with {sandbox}**
-                            - **NEVER use && and other command after EOF**
-                            NEVER HTML-encode the command string. Output raw Windows Batch syntax only.""",
+            "description": (
+                "Execute a READ-ONLY Windows Batch command in the user's terminal. "
+                "Allowed uses: directory listing, reading file content (type), simple checks, "
+                "environment queries, and other non-destructive operations. "
+                "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
+                "Use raw Windows Batch syntax only — no HTML encoding. "
+                "Rules: "
+                f"(1) NEVER use 'cd'; use absolute paths starting with {sandbox}. "
+                "(2) NEVER chain commands after EOF with &&. "
+                "(3) One call = at most 1-2 simple actions. "
+                "(4) Output raw syntax: use < > not &lt; &gt;, use && not &amp;&amp;, "
+                "use | not &pipe;, use \" not &quot;."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "think": {
-                        "type": "string",
-                        "description": "You must think carefully what's the best Windows Batch command to do,"
-                                       "**you must do it step by step**, check previous result every step,"
-                                       "**you must not output dangerous Windows Batch command**, write your thoughts",
-                    },
                     "command": {
                         "type": "string",
-                        "description": "Raw Windows Batch command with proper Windows Batch syntax (no HTML encoding)"
+                        "description": "Raw Windows Batch command with proper syntax (no HTML encoding)."
                     }
                 },
-                "required": ["think", "command"]
+                "required": ["command"]
+            }
+        }
+    }
+else:
+    tool_batch = {
+        "type": "function",
+        "function": {
+            "name": "batch",
+            "description": (
+                "Execute a READ-ONLY bash command in the user's terminal. "
+                "Allowed uses: directory listing, reading file content (cat), simple checks, "
+                "environment queries, and other non-destructive operations. "
+                "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
+                "Use raw bash syntax only — no HTML encoding. "
+                "Rules: "
+                f"(1) NEVER use 'cd'; use absolute paths starting with {sandbox}. "
+                "(2) NEVER chain commands after a heredoc EOF with &&. "
+                "(3) One call = at most 1-2 simple actions. "
+                "(4) Output raw syntax: use < > not &lt; &gt;, use && not &amp;&amp;, "
+                "use | not &pipe;, use \" not &quot;."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Raw bash command with proper shell syntax (no HTML encoding)."
+                    }
+                },
+                "required": ["command"]
             }
         }
     }
 
-tool_bash = {
-        "type": "function",
-        "function": {
-            "name": "batch",
-            "description": f"""Execute bash commands in the user's terminal. 
-                            CRITICAL: Generate commands with RAW shell syntax:
-                            - Use < > not &lt; &gt;
-                            - Use && not &amp; &amp;
-                            - Use | not &pipe;
-                            - Use " not &quot; 
-                            - **NEVER use cd, Use only absolute path starts with {sandbox}**
-                            - **NEVER use && and other command after EOF**
-                            NEVER HTML-encode the command string. Output raw bash syntax only.""",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "think": {
-                        "type": "string",
-                        "description": "You must think carefully what's the best bash command to do,"
-                                       "**you must do it step by step**, check previous result every step,"
-                                       "**you must not output dangerous bash command**, write your thoughts",
-                    },
-                    "command": {
-                        "type": "string",
-                        "description": "Raw bash command with proper shell syntax (no HTML encoding)"
-                    }
-                },
-                "required": ["think", "command"]
-            }
+tool_fileio = {
+    "type": "function",
+    "function": {
+        "name": "fileio",
+        "description": (
+            "Perform file read/write operations within the sandbox. "
+            f"ONLY operate within {sandbox} and its subdirectories. "
+            "Use this tool for ALL file content changes: create, write, append, delete, "
+            "and line-level edits. Never use the batch tool for any of these operations."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": (
+                        "Use exactly ONE of the following commands with the syntax shown:\n\n"
+                        "write <path> <content>\n"
+                        "  Create or overwrite a file with the given content.\n\n"
+                        "read <path>\n"
+                        "  Read and return the file content. Returns error if file not found.\n\n"
+                        "append <path> <content>\n"
+                        "  Append content to a file. Creates the file if it does not exist.\n\n"
+                        "delete <path>\n"
+                        "  Delete a file. Returns error if file not found.\n\n"
+                        "insert_lines <path> <line_index> <content>\n"
+                        "  Insert one or more lines before the given line index (1-based).\n"
+                        "  After insertion, the new content starts at line_index.\n"
+                        "  Returns error if file not found or line_index is out of range.\n\n"
+                        "delete_lines <path> <line_index> <count>\n"
+                        "  Delete exactly <count> lines starting from line_index (1-based).\n"
+                        "  Returns error if file not found or range is out of bounds.\n\n"
+                        "replace_lines <path> <line_index> <count> <content>\n"
+                        "  Delete <count> lines starting from line_index, then insert <content> "
+                        "at that position. Replacement may have a different line count than <count>.\n"
+                        "  Returns error if file not found or range is out of bounds.\n\n"
+                        "replace_symbol <path> <symbol> <content>\n"
+                        "  Replace all occurrences of <symbol> in the file with <content>. "
+                        "Returns error if file or symbol not found.\n\n"
+                        "Note: <content> is treated as a single argument. "
+                        "Multiple lines of content should be separated by \n"
+                    )
+                }
+            },
+            "required": ["command"]
         }
     }
-
-tool_batch = tool_bat if sys.platform.lower().__contains__("win") else tool_bash
+}

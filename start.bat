@@ -7,8 +7,12 @@ if not exist %workspace% (
     mkdir %workspace%
 )
 
-if not exist %workspace%\grok.token (
-    set /p token=Place your Token in %workspace%\grok.token, press enter when done
+if not exist %workspace%\token\grok.token (
+    set /p token=Copy your openrouter API KEY, press enter when done $ 
+    if not exist %workspace%\token (
+        mkdir %workspace%\token
+    )
+    echo !token! > %workspace%\token\grok.token
 )
 
 if not exist %workspace%\venv (
@@ -28,6 +32,7 @@ xcopy "%target%" "C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312" /
 
 echo Start Grok
 cd %workspace%
+:RESTART
 %workspace%\venv\Scripts\python %workspace%\main.py
-
 pause
+goto :RESTART
