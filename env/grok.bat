@@ -6,7 +6,7 @@ set "reply=%workspace%\fcomm\reply.grok"
 set "msg=%workspace%\fcomm\msg.grok"
 set "endkey=<GROK status=END></GROK>"
 set "rxkey=<GROK status=DONE></GROK>"
-set "txkey=^<GROK status=start^>^</GROK^>"
+set "txkey=^<GROK status=START^>^</GROK^>"
 
 :: poll
 if "%~1" equ "" (

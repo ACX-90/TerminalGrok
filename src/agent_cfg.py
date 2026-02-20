@@ -9,36 +9,28 @@ All operations are restricted to a sandboxed workspace for security.
 """
 import os
 import sys
-from global_cfg import *
+import global_cfg as glb
 
-# --- Load API token ---
-grok_token_file = f"{workspace}/token/grok.token"
-with open(grok_token_file, "r") as f:
-    grok_token = f.read().rstrip(' \n')
-    if grok_token.startswith("#error"):
-        print("Error: your API key is invalid.")
-        exit(-1)
-
-# --- Load previous memories ---
-mem_file = f"{workspace}/memories.txt"
-try:
-    with open(mem_file, "r", encoding="utf-8") as f:
-        memories = f.read()
-except FileNotFoundError:
-    memories = "No previous conversation."
+# --- Models config ---
+# model from openrouter, can be modified to other vendors' models if needed
+# compress_model user openrouter's free model, which can be used for compressing
+# conversation history to save token, but currently not implemented yet
+model = "x-ai/grok-4.1-fast"            # Grok-4.1-Fast from openrouter
+compress_model = "openrouter/free"
 
 # --- System prompt ---
-# msg_system costs approximately 350 tokens when sent to the LLM vendor.
+# msg_system costs approximately 400 tokens when sent to the LLM vendor.
 msg_system = {
     "role": "system",
     "content": (
-        f"You are Grok, a terminal assistant running on {os_type}.\n"
-        f"The user's name is {username}. Greet them at the start of the conversation.\n\n"
-        f"<memory>\n{memories}\n</memory>\n\n"
+        f"You are Grok, a terminal assistant running on {glb.os_type}.\n"
+        f"The user's name is {glb.username}. Greet them at the start of the conversation.\n\n"
+        f"<memory>\n{glb.memories}\n</memory>\n\n"
         "**Rules you must follow**:\n"
         "- ASCII only, no emoji. Keep responses short, precise, with mild humor.\n"
-        f"- Workspace is strictly limited to {sandbox} and its subdirectories. NEVER access paths outside this.\n"
-        "- You have access to three tools: `batch` for read-only terminal commands, `fileio` for file operations, and `task` for task management.\n"
+        f"- Workspace is strictly limited to {glb.sandbox} and its subdirectories. NEVER access paths outside this.\n"
+        "- You have access to three tools: `batch` for read-only terminal commands, `fileio` for file operations,"
+        " and `task` for task management.\n"
         "- Use the `batch` tool ONLY for read-only operations: directory listing, reading file content, "
         "simple checks, environment queries, and other non-destructive actions.\n"
         "- NEVER use `batch` to create, modify, append, overwrite, or delete file contents.\n"
@@ -46,7 +38,12 @@ msg_system = {
         "- Use the `task` tool for scheduling and managing tasks within the sandbox.\n"
         "- One `batch` call = at most 1-2 simple actions. Think step by step.\n"
         "- On non-zero return code: analyze the error and decide the next step.\n"
-        "- If the user forbids a tool: find an alternative or explain why the task is impossible."
+        "- If the user forbids a tool: find an alternative or explain why the task is impossible.\n"
+        "- Your workflow is: analyze the situation, decide what to do,"
+        f" if tools are needed, you can output the require flag **{glb.grok_tool_req_flag} in THE FIRST LINE of reply**.\n"
+        " In the next round, decide how to use tools to finish tasks, "
+        " **WARNING: NEVER break the rules above, if you are not sure, choose the safer option. "
+        " Breaking any format requirement will cause system crash**"
     )
 }
 
@@ -65,7 +62,7 @@ if sys.platform.lower().__contains__("win"):
                 "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
                 "Use raw Windows Batch syntax only — no HTML encoding. "
                 "Rules: "
-                f"(1) NEVER use 'cd'; use absolute paths starting with {sandbox}. "
+                f"(1) NEVER use 'cd'; use absolute paths starting with {glb.sandbox}. "
                 "(2) NEVER chain commands after EOF with &&. "
                 "(3) One call = at most 1-2 simple actions. "
                 "(4) Output raw syntax: use < > not &lt; &gt;, use && not &amp;&amp;, "
@@ -95,7 +92,7 @@ else:
                 "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
                 "Use raw bash syntax only — no HTML encoding. "
                 "Rules: "
-                f"(1) NEVER use 'cd'; use absolute paths starting with {sandbox}. "
+                f"(1) NEVER use 'cd'; use absolute paths starting with {glb.sandbox}. "
                 "(2) NEVER chain commands after a heredoc EOF with &&. "
                 "(3) One call = at most 1-2 simple actions. "
                 "(4) Output raw syntax: use < > not &lt; &gt;, use && not &amp;&amp;, "
@@ -121,7 +118,7 @@ tool_fileio = {
         "name": "fileio",
         "description": (
             "Perform file read/write operations within the sandbox. "
-            f"Use absolute paths starting with {sandbox}, only operate within this directory and its subdirectories. "
+            f"Use absolute paths starting with {glb.sandbox}, only operate within this directory and its subdirectories. "
             "Use this tool for ALL file content changes: create, write, append, delete, "
             "and line-level edits. Never use the batch tool for any of these operations."
         ),
@@ -215,4 +212,32 @@ tool_task = {
             "required": ["command"]
         }
     }
+}
+
+# tool_telecom costs approximately 150 tokens when sent to the LLM vendor.
+tool_telecom = {
+    "type": "function",
+    "function": {
+        "name": "telecom",
+        "description": (
+            "Send a Telegram message to the user or to a group chat. "
+            "Use this tool to notify the user of task completion, errors, or important information. "
+            "Messages are sent asynchronously and do not block execution."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {
+                    "type": "string",
+                    "description": "Recipient identifier: 'user' for direct message, or 'group' for group chat."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "The message content to send. Use plain text, no HTML or markdown."
+                }
+            },
+            "required": ["recipient", "message"]
+        }
+    }
+
 }

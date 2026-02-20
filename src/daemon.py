@@ -33,7 +33,7 @@ import os
 import agent
 from datetime import datetime
 from global_cfg import *
-from generic import *
+from general import *
 
 # process_new_task:
 # Convert countdown to start_time for newly created tasks, and update the task file.
@@ -66,6 +66,7 @@ def execute_task(load_task, current_task, task_path, taskfile):
     exec_count = int(current_task.get('loop', {}).get('exec_count', {}).get('#text', '0'))
     total_count = exec_count + remain
     interval_seconds = int(loop_section.get('interval', {}).get('#text', '60'))
+
     # ------------------ Decide whether to execute ------------------
     should_execute = True
     if remain == 0:
@@ -80,6 +81,7 @@ def execute_task(load_task, current_task, task_path, taskfile):
         # Invalid remain value
         print(f"Task {taskfile} has invalid remain value {remain} → skipping execution and deleting")
         should_execute = False
+
     # ------------------ Execute the task ------------------
     if should_execute:
         exec_count += 1
@@ -94,6 +96,7 @@ def execute_task(load_task, current_task, task_path, taskfile):
             exec_info = f"(Once)"
         with open(agent.grok_fcomm_in_task, "w") as f:  # assuming 'agent' is available in scope
             f.write(f"Scheduled Task {exec_info}:\n{action_text}\n<GROK status=start></GROK>")
+            
     # ------------------ Post-execution cleanup / update ------------------
     if not is_loop_enabled:
         # Non-looping task: delete after execution (or if skipped)

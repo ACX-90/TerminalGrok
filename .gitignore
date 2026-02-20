@@ -1,7 +1,13 @@
 venv/
+.venv/
+.idea/
 __pycache__/
+
 *.token
 *.grok
 *.log
 *.task
 *.txt
+/sandbox
+/debug
+/debug

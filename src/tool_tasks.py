@@ -1,8 +1,38 @@
+"""
+Module: tool_tasks.py
+This module provides a comprehensive set of tools for managing scheduled tasks in a terminal-based
+environment. It handles task creation, updating, deletion, listing, and retrieval, with tasks stored
+as XML-formatted files. Tasks can be configured with countdown timers, actions (commands or prompts),
+and looping behaviors for repeated execution.
+Key Features:
+- Task files are stored in a designated directory (taskdir), with each task named as '<task_name>.task'.
+- XML structure includes elements for countdown (initial delay), action (executable command or Grok
+ prompt), and loop settings (enable, interval, remain).
+- Interval is enforced to a minimum of 60 seconds to prevent excessive resource usage.
+- Supports infinite loops when remain is set to -1.
+Available Tools:
+1. update_task(task_name, content): Creates or updates a task file with provided XML content. Validates
+ XML structure and required elements.
+2. delete_task(task_name): Removes the specified task file from the directory.
+3. list_tasks(): Returns a dictionary of all task names and their XML contents.
+4. get_task_info(task_name): Retrieves the XML content of a specific task file.
+5. execute_tasks_command(command): Parses and executes commands for task operations (update, delete, 
+list, info).
+6. tool_tasks_validate(): Runs validation tests for all command types to ensure functionality.
+Usage:
+- Tasks are intended for scheduling terminal commands or AI prompts with optional repetition.
+- Commands are executed via the 'execute_tasks_command' function, supporting subcommands like 'update',
+ 'delete', 'list', and 'info'.
+- Validation ensures XML integrity and prevents invalid configurations.
+Dependencies: os, sys, time, xml.etree.ElementTree, global_cfg, general.
+Note: This module is part of a larger system for task automation and should be used in conjunction with
+ scheduling mechanisms.
+"""
 import os
 import sys
 import time
 from global_cfg import *
-from generic import *
+from general import *
 import xml.etree.ElementTree as ET
 
 # =================================================================

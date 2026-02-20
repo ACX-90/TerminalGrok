@@ -9,18 +9,19 @@ if not exist %workspace% (
     mkdir %workspace%
 )
 
-if not exist %workspace%\token\grok.token (
+if not exist %workspace%\tokens\grok.token (
     set /p token=Copy your openrouter API KEY, press enter when done $ 
-    if not exist %workspace%\token (
-        mkdir %workspace%\token
+    if not exist %workspace%\tokens (
+        mkdir %workspace%\tokens
     )
-    echo !token! > %workspace%\token\grok.token
+    echo !token! > %workspace%\tokens\grok.token
 )
 
 if not exist %workspace%\venv (
     py -m venv %workspace%\venv
     %workspace%\venv\Scripts\pip install openai
     %workspace%\venv\Scripts\pip install httpx[socks]
+    %workspace%\venv\Scripts\pip install python-telegram-bot
 )
 
 if not %cd% equ %workspace% (

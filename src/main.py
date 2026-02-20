@@ -1,46 +1,75 @@
 """
 Main module for the TerminalGrok application.
-This script initializes and runs a daemon process, then enters an infinite loop to manage 
-conversations with the Grok AI. It handles user inputs, tool calls, and responses, including 
-preprocessing commands, managing tool usage flags, and maintaining conversation history 
-to prevent excessive length (keeping the latest 100 messages).
+
+This script serves as the entry point for the TerminalGrok system, which integrates a Grok AI
+agent for conversational interactions via a terminal interface. It begins by importing necessary
+modules: global_cfg for configuration, general for shared utilities, agent for AI interactions,
+and daemon for background processes.
+
+The script first launches a daemon process using daemon.run_daemon(), which likely handles
+persistent tasks or services in the background.
+
+Following daemon initialization, the code enters an infinite loop to manage the conversation
+flow with the Grok AI. It handles various states: initial setup where welcome messages are
+displayed and default conversation starters are set; scenarios where tools were used in the
+previous interaction, allowing the agent to decide on further tool usage; and standard chat
+rounds where user input is solicited.
+
+User inputs are processed, with special handling for commands prefixed with '/', which are
+treated as controller commands rather than conversational input. These are preprocessed,
+and the loop continues if necessary.
+
+The core interaction involves calling agent.grok_chat() to obtain a reply from Grok, which
+may include tool calls. If tool calls are present, they are handled via agent.tool_handle(),
+setting flags to indicate tool usage. Otherwise, the reply content is processed through
+agent.chat_handle().
+
+To manage conversation length and prevent excessive memory usage, the script trims the
+message history, retaining the first message and the latest 95, ensuring the total stays
+at or below 100 messages. This approach maintains context without unbounded growth.
 """
-from agent import *
-from daemon import *
+import time
+import global_cfg as glb
+import general as gen
+import agent
+import daemon
+import tool_telecom as telecom
 
 # ==============================================================
 # Daemon
 # ==============================================================
-run_daemon()
+daemon.run_daemon()
+telecom.start_telegram_bot()
 
 # ==============================================================
 # The main loop
 # ==============================================================
 while True:
-    if initial == 1:
-        debug_out("SYS: First entry, print welcome info and set initial conversation.")
+    if gen.initial == 1:
+        agent.debug_out("SYS: First entry, print welcome info and set initial conversation.")
         # first entry print welcome info, and set initial conversation. let grok start the first
         # hello message and self-introduction, then wait for user input
-        initial = 0
-        print_welcome()
-        messages = default_message
-    elif tool_used_last_time:
-        debug_out("SYS: Agent used tools last time, let it decide to use tools or not once again.")
+        gen.initial = 0
+        agent.print_welcome()
+        agent.messages = agent.default_message
+    elif gen.tool_used_last_time:
+        agent.debug_out("SYS: Agent used tools last time, let it decide to use tools or not once again.")
         # the agent used tool last time, let it decide to use tools or not once again. if it still
         #  want to use tools, then handle the tool calls directly without asking for user input
-        tool_used_last_time = 0
-        current_tools = tools
+        gen.tool_used_last_time = 0
+        agent.current_tools = agent.tools
+        agent.debug_out(f"SYS: tools activated")
     else:
-        debug_out("SYS: Start a new chat round, ask for user input.")
+        agent.debug_out("SYS: Start a new chat round, ask for user input.")
         # when start a new chat, clear tools option, and ask user input
         # or when the agent decide not to use tools, ask for user input to continue the conversation
-        tool_used_last_time = 0
-        current_tools = 0
-        user_input = get_user_input()
+        gen.tool_used_last_time = 0
+        agent.current_tools = 0
+        user_input = agent.get_user_input()
         # when user input starts with "/", it is a command for the python controller,
         # not a normal conversation input, so handle the command first and get the result,
         # then send the result back to grok and get the next reply, until no more command input
-        continue_flag = preprocess_user_input(user_input)
+        continue_flag = agent.preprocess_user_input(user_input)
         if continue_flag:
             continue
         
@@ -48,24 +77,24 @@ while True:
     # the reply may contain tool calls, if so, handle the tool calls first and get the result,
     # then send the result back to grok and get the next reply,
     # if not, just print the reply content and wait for user input
-    reply = grok_chat()
+    reply = agent.grok_chat()
     
     # if the reply contains tool calls, handle them first, 
     # then send the result back to grok and get the next reply,
     # until no more tool calls
-    messages.append(reply)
+    agent.messages.append(reply)
     if reply.tool_calls:
-        tool_used_last_time = 1
-        tool_handle(reply)
+        gen.tool_used_last_time = 1
+        agent.tool_handle(reply)
     elif reply.content:
-        chat_handle(reply)
+        agent.chat_handle(reply)
     
     # avoid conversation too long
     # can be done better by summarizing the conversation, 
     # but currently just keep the latest 100 messages
-    if len(messages) > 100:
-        messages = messages[0:1] + messages[-95:]
-        save_message = save_message[-95:]
+    if len(agent.messages) > 100:
+        agent.messages = agent.messages[0:1] + agent.messages[-95:]
+        agent.save_message = agent.save_message[-95:]
     
 
 
