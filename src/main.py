@@ -1,20 +1,33 @@
+"""
+Main module for the TerminalGrok application.
+This script initializes and runs a daemon process, then enters an infinite loop to manage 
+conversations with the Grok AI. It handles user inputs, tool calls, and responses, including 
+preprocessing commands, managing tool usage flags, and maintaining conversation history 
+to prevent excessive length (keeping the latest 100 messages).
+"""
 from agent import *
+from daemon import *
 
-##############################################################
+# ==============================================================
+# Daemon
+# ==============================================================
+run_daemon()
+
+# ==============================================================
 # The main loop
-##############################################################
+# ==============================================================
 while True:
     if initial == 1:
         debug_out("SYS: First entry, print welcome info and set initial conversation.")
-        # first entry print welcome info, and set initial conversation
-        # let grok start the first hello message and self-introduction, then wait for user input
+        # first entry print welcome info, and set initial conversation. let grok start the first
+        # hello message and self-introduction, then wait for user input
         initial = 0
         print_welcome()
         messages = default_message
     elif tool_used_last_time:
         debug_out("SYS: Agent used tools last time, let it decide to use tools or not once again.")
-        # the agent used tool last time, let it decide to use tools or not once again
-        # if it still want to use tools, then handle the tool calls directly without asking for user input
+        # the agent used tool last time, let it decide to use tools or not once again. if it still
+        #  want to use tools, then handle the tool calls directly without asking for user input
         tool_used_last_time = 0
         current_tools = tools
     else:

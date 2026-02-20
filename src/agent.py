@@ -1,3 +1,27 @@
+"""
+TerminalGrok Agent Module
+This module implements an AI agent that interacts with the Grok model via OpenRouter API.
+It provides a conversational interface where users can chat with Grok, execute commands using tools,
+and manage conversation history. The agent supports features like session reset, memory saving,
+tool confirmation, and file-based communication for remote terminals.
+Key Features:
+- Conversational AI using Grok-4.1-Fast model
+- Tool integration for batch commands, file I/O, and task management
+- Proxy support for network requests
+- Debug and logging capabilities
+- File-based I/O for remote terminal communication
+- Memory management for conversation history
+Dependencies:
+- openai: For API interactions
+- agent_cfg: Configuration module
+- tool_fileio: File I/O tool module
+- tool_tasks: Task management tool module
+Usage:
+Run the script to start the agent. Use commands like /r to reset, /q to quit, /m to save memory, etc.
+The agent can execute tools based on user input and Grok's responses.
+Author: [Your Name or Placeholder]
+Date: [Current Date or Placeholder]
+"""
 import time
 import os
 import json
@@ -5,6 +29,7 @@ import html
 import subprocess
 import agent_cfg
 import tool_fileio
+import tool_tasks
 # use clash as system proxy and it's a socks -> socks5 fix for linux
 # these environment variables must be set before importing openai client,
 # otherwise the proxy setting will not work
@@ -60,6 +85,7 @@ save_message = []
 tools = [
     agent_cfg.tool_batch,
     agent_cfg.tool_fileio,
+    agent_cfg.tool_task,
 ]
 current_tools = 0
 
@@ -67,14 +93,15 @@ current_tools = 0
 # global controll and status variables
 # =======================================================================================
 # debug mode switch, set to 1 to print debug info
-debug = 1
-# debug json switch, if set to 1, the raw json messages sent to and received from grok will be printed in terminal for debugging,
+debug = 0
+# debug json switch, if set to 1, the raw json messages sent to and received from grok will be printed
+# in terminal for debugging,
 debug_json = 1              
 # initial switch, to print welcome info and set default conversation at the first entry
 initial = 1                 
 # grok_use_fileio switch, if set to 1, the agent will get user input from file,
 # and print output to file, which can be used for remote terminal display
-grok_use_fileio = 0               
+grok_use_fileio = 1               
 # confirm_need switch, if set to 1, the agent will ask for user confirm before executing tool command
 confirm_need = 1
 # a flag to indicate whether the agent used tool last time, 
@@ -83,12 +110,13 @@ confirm_need = 1
 tool_used_last_time = 0
 # the file path for agent and remote terminal communication when grok_use_fileio switch is on
 grok_fcomm_in = f"{agent_cfg.workspace}/fcomm/msg.grok"
+grok_fcomm_in_task = f"{agent_cfg.workspace}/fcomm/msg_task.grok"
 # the file path for agent to output tool command and thought when grok_use_fileio switch is on
 grok_fcomm_out = f"{agent_cfg.workspace}/fcomm/reply.grok"
 
 # myprint:
 # print text in terminal only, or give to another terminal
-def myprint(*args, **kwargs):
+def myprint_fcomm(*args, **kwargs):
     if grok_use_fileio:
         if not os.path.isdir(f"{agent_cfg.workspace}/fcomm"):
             os.makedirs(f"{agent_cfg.workspace}/fcomm")
@@ -98,6 +126,10 @@ def myprint(*args, **kwargs):
             operation = "w"
         with open(grok_fcomm_out, operation) as f:
             print(*args, file=f, **kwargs)
+
+# myprint2:
+def myprint(*args, **kwargs):
+    myprint_fcomm(*args, **kwargs)
     print(*args, **kwargs)
 
 # debug_out:
@@ -132,18 +164,20 @@ def debug_json_out(data):
 # output done flag to fcomm file
 # the remote terminal can print data
 def grok_done():
-    myprint("\n<GROK status=DONE></GROK>")
+    myprint_fcomm("\n<GROK status=DONE></GROK>")
 
 # grok_end:
 # output end flag to fcomm file
 # the remote terminal can stop waiting
 def grok_end():
-    myprint("\n<GROK status=END></GROK>")
+    myprint_fcomm("\n<GROK status=END></GROK>")
 
 # get_grok_input_from_file:
 # get input from fcomm file, with start flag, and clear the file after reading
 def get_grok_input_from_file():
     grok_end()
+    global daemon_pause
+    daemon_pause = 0
     grok_start_flag = "<GROK status=start></GROK>"
     while True:
         if os.path.isfile(grok_fcomm_in):
@@ -152,8 +186,15 @@ def get_grok_input_from_file():
                 if fcomm_rx.find(grok_start_flag) >= 0:
                     open(grok_fcomm_in, 'w').write('')
                     break
+        if os.path.isfile(grok_fcomm_in_task):
+            with open(grok_fcomm_in_task, 'r') as f:
+                fcomm_rx = f.read()
+                if fcomm_rx.find(grok_start_flag) >= 0:
+                    open(grok_fcomm_in_task, 'w').write('')
+                    break
         time.sleep(0.1)
-    return fcomm_rx.removesuffix(grok_start_flag)
+    daemon_pause = 1
+    return fcomm_rx.replace(grok_start_flag, '').strip()
 
 # print_agent_tool:
 # print the tool command and grok's thought, and ask for confirm if needed
@@ -279,33 +320,37 @@ def grok_chat():
     debug_json_out(completion.dict())
     return completion.choices[0].message
 
+# compress_chat:
 # not implemented yet, just a placeholder for future use
 def compress_chat():
     return ''
 
+# tool_preprocess:
+# preprocess the tool call from grok, print the command and thought, and ask for confirm if needed
+# return the confirm info and the command to execute
+def tool_preprocess(reply):
+    tool_call = reply.tool_calls[0]
+    tool_name = tool_call.function.name
+    args = json.loads(tool_call.function.arguments)
+    agent_think = reply.reasoning
+    agent_cmd = args.get("command")
+    # DECODE HTML entities if Grok accidentally encodes them in the command, which should be executed
+    # as raw syntax
+    agent_cmd = html.unescape(agent_cmd)
+    # save the tool command and thought to save_message for potential saving to mem file, with some
+    #  formatting for future use
+    save_message.append(f"<assistant>tool={tool_name}, think={agent_think}, cmd=\n{agent_cmd}\n</assistant>\n")
+    print_agent_tool(agent_think, agent_cmd)
+    confirm_info = get_tool_confirm_info()
+    return confirm_info, agent_cmd
 
 # tool_handle_batch:
 # handle the batch tool call from grok, currently just print the command and thought, and ask for confirm
 def tool_handle_batch(reply):
-    global tool_used_last_time, tool_result
-    tool_used_last_time = 1
-    tool_call = reply.tool_calls[0]
-    args = json.loads(tool_call.function.arguments)
-    agent_think = reply.reasoning
-    agent_cmd = args.get("command")
-
-    # DECODE HTML entities if Grok accidentally encodes them
-    agent_cmd = html.unescape(agent_cmd)
-    save_message.append(f"<assistant>tool=batch, think={agent_think}, cmd=\n{agent_cmd}\n</assistant>\n")
-    print_agent_tool(agent_think, agent_cmd)
-
-    confirm_info = get_tool_confirm_info()
-
+    global tool_result
+    confirm_info, agent_cmd = tool_preprocess(reply)
     if confirm_info.startswith('y'):
-        ret = subprocess.run(agent_cmd,
-            text=True,
-            shell=True,
-            capture_output=True)
+        ret = subprocess.run(agent_cmd, text=True, shell=True, capture_output=True)
         tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}, stderr={ret.stderr}"
     else:
         tool_result = f"returncode=-1, stderr=user temporarily declined tool call once."
@@ -313,52 +358,26 @@ def tool_handle_batch(reply):
 # tool_handle_fileio:
 # handle the fileio tool call from grok, currently just print the command and thought, and ask for confirm,
 def tool_handle_fileio(reply):
-    global tool_used_last_time, tool_result
-    tool_used_last_time = 1
-    tool_call = reply.tool_calls[0]
-    args = json.loads(tool_call.function.arguments)
-    agent_think = reply.reasoning
-    agent_cmd = args.get("command")
-
-    # DECODE HTML entities if Grok accidentally encodes them
-    agent_cmd = html.unescape(agent_cmd)
-    save_message.append(f"<assistant>tool=fileio, think={agent_think}, cmd=\n{agent_cmd}\n</assistant>\n")
-    print_agent_tool(agent_think, agent_cmd)
-
-    confirm_info = get_tool_confirm_info()
-
+    global tool_result
+    confirm_info, agent_cmd = tool_preprocess(reply)
     if confirm_info.startswith('y'):
-        # currently the command is expected to be a python expression that can be evaled to get the result,
-        # in the future it can be modified to support more complex commands
         try:
-            if agent_cmd.startswith("write "):
-                args = agent_cmd[len("write "):].split(" ", 1)
-                tool_result = tool_fileio.file_write(args[0], args[1])
-            elif agent_cmd.startswith("read "):
-                args = agent_cmd[len("read "):].split(" ", 1)
-                tool_result = tool_fileio.file_read(args[0])
-            elif agent_cmd.startswith("append "):
-                args = agent_cmd[len("append "):].split(" ", 1)
-                tool_result = tool_fileio.file_append(args[0], args[1])
-            elif agent_cmd.startswith("delete "):
-                args = agent_cmd[len("delete "):].split(" ", 1)
-                tool_result = tool_fileio.file_delete(args[0])
-            elif agent_cmd.startswith("insert_lines "):
-                args = agent_cmd[len("insert_lines "):].split(" ", 2)
-                tool_result = tool_fileio.file_insert_lines(args[0], int(args[1]), args[2])
-            elif agent_cmd.startswith("delete_lines "):
-                args = agent_cmd[len("delete_lines "):].split(" ", 2)
-                tool_result = tool_fileio.file_delete_lines(args[0], int(args[1]), int(args[2]))
-            elif agent_cmd.startswith("replace_lines "):
-                args = agent_cmd[len("replace_lines "):].split(" ", 3)
-                tool_result = tool_fileio.file_replace_lines(args[0], int(args[1]), int(args[2]), args[3])
-            elif agent_cmd.startswith("replace_symbol "):
-                args = agent_cmd[len("replace_symbol "):].split(" ", 2)
-                tool_result = tool_fileio.file_replace_symbol(args[0], args[1], args[2])
-            else:
-                tool_result = f"ERROR: unknown fileio command."
+            tool_result = tool_fileio.execute_fileio_command(agent_cmd)
         except Exception as e:
             tool_result = f"ERROR: Exception occurred while executing fileio command. Exception: {e}"
+    else:
+        tool_result = f"returncode=-1, stderr=user temporarily declined tool call once."
+
+# tool_handle_task:
+# handle the task tool call from grok, currently just print the command and thought, and ask for confirm,
+def tool_handle_task(reply):
+    global tool_result
+    confirm_info, agent_cmd = tool_preprocess(reply)
+    if confirm_info.startswith('y'):
+        try:
+            tool_result = tool_tasks.execute_tasks_command(agent_cmd)
+        except Exception as e:
+            tool_result = f"ERROR: Exception occurred while executing task command. Exception: {e}"
     else:
         tool_result = f"returncode=-1, stderr=user temporarily declined tool call once."
 
@@ -375,6 +394,9 @@ def tool_handle(reply):
             case "fileio":
                 debug_out("Handling fileio tool call...")
                 tool_handle_fileio(reply)
+            case "task":
+                debug_out("Handling task tool call...")
+                tool_handle_task(reply)
             case _:
                 tool_result = f"ERROR: unknown tool {tool_call.function.name}."
         myprint(tool_result)
@@ -382,7 +404,9 @@ def tool_handle(reply):
         messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
         save_message.append(f"<tool_result>{tool_result}</tool_result>\n")
 
-# chat handle
+# chat handle:
+# handle the normal chat reply from grok, save the content to conversation and print it,
+# with some formatting for potential future use
 def chat_handle(reply):
     save_message.append(f"<assistant>{reply.content}</assistant>\n")
     print_content = reply.content.rstrip("\n$")

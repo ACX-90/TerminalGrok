@@ -1,5 +1,7 @@
-memories.txt
-venv
+venv/
 __pycache__/
 *.token
 *.grok
+*.log
+*.task
+*.txt

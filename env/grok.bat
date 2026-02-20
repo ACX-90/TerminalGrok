@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set "workspace=E:\_Workspace\TerminalGrok"
+set "workspace=E:\_Workspace\GitHub\TerminalGrok"
 set "reply=%workspace%\fcomm\reply.grok"
 set "msg=%workspace%\fcomm\msg.grok"
 set "endkey=<GROK status=END></GROK>"
@@ -12,7 +12,7 @@ set "txkey=^<GROK status=start^>^</GROK^>"
 if "%~1" equ "" (
 	if exist %reply% (
 		echo Grok has message
-		powershell -Command "Get-Content '%reply%' | Where-Object { $_ -ne '<GROK status=DONE></GROK>' }"
+		powershell -NoProfile -Command "Get-Content -LiteralPath '%reply%' | Where-Object { $_.Trim() -notmatch '^(<GROK status=DONE></GROK>|<GROK status=END></GROK>)$' }"
 		del %reply%
 	) else (
 		echo Grok is not ready
@@ -31,11 +31,11 @@ echo %txkey% >> %msg%
 if not exist %reply% goto :WAIT
 findstr /C:"%endkey%" %reply% >nul && goto :QUIT
 findstr /C:"%rxkey%" %reply% >nul || goto :WAIT
-powershell -Command "Get-Content '%reply%' | Where-Object { $_ -ne '<GROK status=DONE></GROK>' }"
+powershell -NoProfile -Command "Get-Content -LiteralPath '%reply%' | Where-Object { $_.Trim() -notmatch '^(<GROK status=DONE></GROK>|<GROK status=END></GROK>)$' }"
 del %reply%
 goto :WAIT
 
 :QUIT
-powershell -Command "Get-Content '%reply%' | Where-Object { $_ -ne '<GROK status=END></GROK>' }"
+powershell -NoProfile -Command "Get-Content -LiteralPath '%reply%' | Where-Object { $_.Trim() -notmatch '^(<GROK status=DONE></GROK>|<GROK status=END></GROK>)$' }"
 del %reply%
 exit /b 0
