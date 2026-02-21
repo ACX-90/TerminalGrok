@@ -50,7 +50,7 @@ fi
 
 if [ ! -d "${workspace}/venv" ]; then
     echo "Setup Python"
-    apt install python3.12-venv
+    sudo apt install python3.12-venv
     python3.12 -m venv "${workspace}/venv"
     "${workspace}/venv/bin/pip" install "openai"
     "${workspace}/venv/bin/pip" install "httpx[socks]"
