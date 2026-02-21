@@ -17,6 +17,14 @@ if not exist %workspace%\tokens\grok.token (
     echo !token! > %workspace%\tokens\grok.token
 )
 
+if not exist %workspace%\tokens\agent00.token (
+    set /p token=Copy your Telegram API KEY, press enter when done $ 
+    if not exist %workspace%\tokens (
+        mkdir %workspace%\tokens
+    )
+    echo !token! > %workspace%\tokens\agent00.token
+)
+
 if not exist %workspace%\venv (
     py -m venv %workspace%\venv
     %workspace%\venv\Scripts\pip install openai
