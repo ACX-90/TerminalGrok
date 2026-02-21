@@ -60,6 +60,17 @@ tool_used_last_time = 0
 # to grok as tool call reply content
 tool_result = ""
 
+# tools that the agent can use, 
+# currently only batch tool is implemented,
+# more tools can be added in the future
+all_avaliable_tools = [
+    cfg.tool_batch,
+    cfg.tool_fileio,
+    cfg.tool_task,
+    cfg.tool_telecom,
+]
+current_tools = 0
+
 # xml_to_dict:
 # convert xml file to dictionary, the xml file should have a root element, and the root element
 # can have multiple child elements, the child elements can also have their own child elements, 

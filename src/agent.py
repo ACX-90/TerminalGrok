@@ -60,21 +60,6 @@ except Exception as e:
     exit(-1)
 
 # =======================================================================================
-# models and tools config
-# =======================================================================================
-
-# tools that the agent can use, 
-# currently only batch tool is implemented,
-# more tools can be added in the future
-tools = [
-    cfg.tool_batch,
-    cfg.tool_fileio,
-    cfg.tool_task,
-    cfg.tool_telecom,
-]
-current_tools = 0
-
-# =======================================================================================
 # global controll and status variables
 # =======================================================================================
 
@@ -186,14 +171,16 @@ def preprocess_user_input(user_input):
         # and print the command and thought for user confirm
         gen.myprint("Tool Required...", end=' ')
         gen.grok_done()
-        gen.tool_used_last_time = 1
         user_input = user_input[3:]
         tool_activated = 1
-    # if tool_activated:
-    #     user_input += "\nSystem: use tools this round"
-    # else:
-    #     user_input += f"\nSystem: do not use tools this round, you can require tools next round by {glb.grok_tool_req_flag} **in THE FIRST LINE of your reply** if needed."
+
     if not continue_flag:
+        # use another model to judge whether the user wants to use tools.
+        if not tool_activated:
+            tool_activated = tool_router(user_input)
+        if tool_activated:
+            gen.tool_used_last_time = 1
+            gen.current_tools = gen.all_avaliable_tools
         # save user input to conversation, and save_message for potential saving to mem file
         user_input
         gen.messages.append({"role":"user", "content": user_input})
@@ -219,20 +206,54 @@ def get_tool_confirm_info():
         confirm_info = confirm
     return confirm_info
 
+
+# tool_router:
+# route the tool call to corresponding tool handler based on tool name
+def tool_router(user_input):
+    time1 = time.time()
+    aux_completion = client.chat.completions.create(
+        model=cfg.aux_model,
+        messages=[cfg.msg_tool_router, {"role": "user", "content": user_input}],
+        temperature=0.0,
+    )
+    time_elapsed = time.time() - time1
+    gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
+    aux_reply = aux_completion.choices[0].message.content.strip().lower()
+    gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
+    pos_cnt = 0
+    neg_cnt = 0
+    for i, value in enumerate(aux_reply):
+        try:
+            if int(value) & 1 == 1:
+                pos_cnt += 1
+            else:
+                neg_cnt += 1
+        except:
+            pass
+    if pos_cnt > neg_cnt:
+        gen.debug_out(f"Tool router decides to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
+        return 1
+    else:
+        gen.debug_out(f"Tool router decides NOT to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
+        return 0
+
 # grok_chat:
 # make a chat request to grok, with current messages and tools
 def grok_chat():
     try:
-        tool_choice = "auto" if current_tools else 0
-        temperature = 0.0 if current_tools else 0.5
+        tool_choice = "auto" if gen.current_tools else 0
+        temperature = 0.0 if gen.current_tools else 0.5
         gen.debug_out(f"Grok is thinking, temperature={temperature}, tool_choice={tool_choice}...")
+        time1 = time.time()
         completion = client.chat.completions.create(
-            model=cfg.model,
+            model=cfg.main_model,
             messages=gen.messages,
-            tools=current_tools,
+            tools=gen.current_tools,
             tool_choice=tool_choice,
             temperature=temperature,
         )
+        time_elapsed = time.time() - time1
+        gen.debug_out(f"Grok response latency: {time_elapsed:.2f} seconds")
         gen.debug_out('Grok made a repy:')
     except Exception as e:
         gen.myprint(e)

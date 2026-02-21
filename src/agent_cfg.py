@@ -15,8 +15,16 @@ import global_cfg as glb
 # model from openrouter, can be modified to other vendors' models if needed
 # compress_model user openrouter's free model, which can be used for compressing
 # conversation history to save token, but currently not implemented yet
-model = "x-ai/grok-4.1-fast"            # Grok-4.1-Fast from openrouter
-compress_model = "openrouter/free"
+
+# stepfun=too slow = 13 seconds
+# z-ai=too slow = 7 seconds
+# bytedance = 4.5 seconds
+# google gemini 2.0 flash lite within 3 seconds
+# grok4.1 fast about 5 seconds
+
+main_model = "x-ai/grok-4.1-fast"          # Grok-4.1-Fast from openrouter
+aux_model = "google/gemini-2.0-flash-lite-001"     # auxiliary model for tool calls, can be set to a cheaper model if needed
+code_model = "x-ai/grok-code-fast-1"  # code-dedicated model for better code understanding and generation, can be set to a cheaper model if needed
 
 # --- System prompt ---
 # msg_system costs approximately (620 + memories) tokens when sent to the LLM vendor.
@@ -63,13 +71,7 @@ You are operating inside a strict sandbox. These rules are absolute and must nev
 **THINKING & ACTION WORKFLOW:**
 1. Carefully analyze the user's request.
 2. Think step-by-step about the safest way to fulfill it within the sandbox rules.
-3. If any tool calls are needed, begin your reply with the exact tool request flag on the first line.
-4. After receiving tool results, continue to solve the task.
-
-**TOOL REQUEST PROTOCOL:**
-When you need to use tools, your reply must include the XML-like tool request tag in the following format,
- placed at the very beginning of your response:
-{glb.grok_tool_req_flag}
+3. After receiving tool results, continue to solve the task.
 
 Do not include this flag in normal conversational replies.
 
@@ -78,6 +80,28 @@ Do not include this flag in normal conversational replies.
 - If the user prohibits a tool, find an alternative or honestly explain the limitation.
 - When in doubt, always choose the safer, more conservative option.
 - Breaking format requirements or safety rules can lead to system instability. Stay strictly within bounds."""
+    )
+}
+
+# --- Tool Router Prompt ---
+msg_tool_router = {
+    "role": "system",
+    "content": (
+        """
+You are a tool call router, your task is to determine whether user's request requires tool calls,
+**if tool calls are required, output 13579, else output 24680,**
+ you must not output anything else other than these two numbers, 
+ and you must not output any explanation or description, just the number, 
+ and the number must be in a single line, and there should be no other characters or symbols in the line
+ except the number, and there should be no leading or trailing spaces or newline characters.
+ Tools available: 
+ - 'batch' for linux or windows terminal commands, including git commands; 
+ - 'fileio' for file operations like read, write, create, delete, and line-level edits;
+ - 'task' for task management operations like creating, updating, deleting, and listing scheduled tasks;
+ - 'telecom' for sending Telegram messages to the user or group chat.
+ Remember to strictly follow the output format requirements, and do not output anything other than the 
+ specified numbers.
+"""
     )
 }
 

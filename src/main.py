@@ -57,14 +57,14 @@ while True:
         # the agent used tool last time, let it decide to use tools or not once again. if it still
         #  want to use tools, then handle the tool calls directly without asking for user input
         gen.tool_used_last_time = 0
-        agent.current_tools = agent.tools
+        gen.current_tools = gen.all_avaliable_tools
         gen.debug_out(f"SYS: tools activated")
     else:
         gen.debug_out("SYS: Start a new chat round, ask for user input.")
         # when start a new chat, clear tools option, and ask user input
         # or when the agent decide not to use tools, ask for user input to continue the conversation
         gen.tool_used_last_time = 0
-        agent.current_tools = 0
+        gen.current_tools = 0
         user_input = agent.get_user_input()
         # when user input starts with "/", it is a command for the python controller,
         # not a normal conversation input, so handle the command first and get the result,

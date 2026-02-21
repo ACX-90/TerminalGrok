@@ -33,7 +33,7 @@ import platform
 # Global configuration variables
 global_debug = 0
 # debug mode switch, set to 1 to print debug info
-debug = 0
+debug = 1
 # debug json switch, if set to 1, the raw json messages sent to and received from grok will be printed
 # in terminal for debugging,
 debug_json = 1     
@@ -103,7 +103,7 @@ grok_fcomm_out_tele = f"{fcomm_dir}{path_sep}reply_tele.grok"
 grok_fcomm_out_tele_active = f"{fcomm_dir}{path_sep}send_tele.grok"
 grok_fcomm_out_table = [
     grok_fcomm_out,
-    grok_fcomm_out_tele_active,
+    grok_fcomm_out_tele,
 ]
 
 grok_token_file = f"{token_dir}{path_sep}grok.token"
