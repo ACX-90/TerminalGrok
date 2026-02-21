@@ -20,9 +20,11 @@ Design notes:
     encapsulate in an object if concurrent access is required.
 - Keep helpers minimal to avoid extra dependencies and simplify testing.
 """
+import json
 import os
 import xml.etree.ElementTree as ET
 import global_cfg as glb
+import agent_cfg as cfg
 
 # pause flag for the daemon, when daemon_pause is 1, the daemon will pause and not execute the
 # tasks, when daemon_pause is 0, the daemon will run normally.
@@ -33,6 +35,23 @@ import global_cfg as glb
 daemon_pause = 0
 # initial switch, to print welcome info and set default conversation at the first entry
 initial = 0
+# default messages for conversation, can be modified by user input commands
+# the first 2 messages are system messages, which are necessary for grok to work,
+# and should not be removed,
+# the 3rd message is a hello message, which can be removed if user want grok to start with no greeting
+default_message = [
+    cfg.msg_system,       # 0, must be preserved
+]
+# compress_message is for future use, currently not implemented yet
+compress_message = [
+    
+]
+# save_message is the conversation history that will be saved to mem file when user input /m command,
+# it's in plain text format for potential future use, currently it's just a copy of messages with
+# some formatting, but in the future it can be modified to save more info or in a different format
+save_message = []
+# messages is the current conversation history, which will be sent to grok for each chat request,
+messages = default_message
 # a flag to indicate whether the agent used tool last time, 
 # if yes, the agent will not ask for user input, but directly decide to use tools or not once 
 # again, which can be useful when the agent need to use tools for several times in a row
@@ -173,3 +192,61 @@ def get_cfg(name: str) -> dict:
             else:
                 cfg[tag] = value
     return cfg
+
+
+# myprint:
+# print text in terminal only, or give to another terminal
+def myprint_fcomm(*args, **kwargs):
+    if glb.grok_use_fileio:
+        fcomm_file = glb.grok_fcomm_out_table[glb.grok_fcomm_in_src]
+        if os.path.isfile(fcomm_file):
+            operation = "a"
+        else:
+            operation = "w"
+        with open(fcomm_file, operation) as f:
+            print(*args, file=f, **kwargs)
+
+# myprint2:
+def myprint(*args, **kwargs):
+    myprint_fcomm(*args, **kwargs)
+    print(*args, **kwargs)
+
+# debug_out:
+# print debug info in terminal if debug mode is on
+def debug_out(*args, **kwargs):
+    if glb.debug:
+        print(*args, **kwargs)
+
+# debug_json_out:
+# print json data to file if debug_json switch is on
+debug_json_cnt = 0
+def debug_json_out(data):
+    if glb.debug_json:
+        global debug_json_cnt
+        if not os.path.isdir(glb.debug_dir):
+            os.makedirs(glb.debug_dir)
+        if debug_json_cnt == 0:
+            with open(glb.debug_file, "w", encoding="utf-8") as f:
+                f.write('')
+        if not os.path.isfile(glb.debug_file):
+            operation = "w"
+        else:
+            operation = "a"
+        with open(glb.debug_file, operation, encoding="utf-8") as f:
+            f.write(f"\n\n==== Message {debug_json_cnt} ========================\n\n")
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        debug_json_cnt += 1
+        
+# grok_done:
+# output done flag to fcomm file
+# the remote terminal can print data
+def grok_done():
+    print(f"--- grok_done called, output done flag to fcomm file ---")
+    myprint_fcomm(glb.grok_fcomm_done)
+
+# grok_end:
+# output end flag to fcomm file
+# the remote terminal can stop waiting
+def grok_end():
+    print(f"--- grok_end called, output end flag to fcomm file ---")
+    myprint_fcomm(glb.grok_fcomm_end)

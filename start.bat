@@ -22,6 +22,7 @@ if not exist %workspace%\venv (
     %workspace%\venv\Scripts\pip install openai
     %workspace%\venv\Scripts\pip install httpx[socks]
     %workspace%\venv\Scripts\pip install python-telegram-bot
+    %workspace%\venv\Scripts\pip install python-telegram-bot[job-queue]
 )
 
 if not %cd% equ %workspace% (

@@ -46,21 +46,21 @@ telecom.start_telegram_bot()
 # ==============================================================
 while True:
     if gen.initial == 1:
-        agent.debug_out("SYS: First entry, print welcome info and set initial conversation.")
+        gen.debug_out("SYS: First entry, print welcome info and set initial conversation.")
         # first entry print welcome info, and set initial conversation. let grok start the first
         # hello message and self-introduction, then wait for user input
         gen.initial = 0
         agent.print_welcome()
-        agent.messages = agent.default_message
+        gen.messages = gen.default_message
     elif gen.tool_used_last_time:
-        agent.debug_out("SYS: Agent used tools last time, let it decide to use tools or not once again.")
+        gen.debug_out("SYS: Agent used tools last time, let it decide to use tools or not once again.")
         # the agent used tool last time, let it decide to use tools or not once again. if it still
         #  want to use tools, then handle the tool calls directly without asking for user input
         gen.tool_used_last_time = 0
         agent.current_tools = agent.tools
-        agent.debug_out(f"SYS: tools activated")
+        gen.debug_out(f"SYS: tools activated")
     else:
-        agent.debug_out("SYS: Start a new chat round, ask for user input.")
+        gen.debug_out("SYS: Start a new chat round, ask for user input.")
         # when start a new chat, clear tools option, and ask user input
         # or when the agent decide not to use tools, ask for user input to continue the conversation
         gen.tool_used_last_time = 0
@@ -82,7 +82,7 @@ while True:
     # if the reply contains tool calls, handle them first, 
     # then send the result back to grok and get the next reply,
     # until no more tool calls
-    agent.messages.append(reply)
+    gen.messages.append(reply)
     if reply.tool_calls:
         gen.tool_used_last_time = 1
         agent.tool_handle(reply)
@@ -92,9 +92,9 @@ while True:
     # avoid conversation too long
     # can be done better by summarizing the conversation, 
     # but currently just keep the latest 100 messages
-    if len(agent.messages) > 100:
-        agent.messages = agent.messages[0:1] + agent.messages[-95:]
-        agent.save_message = agent.save_message[-95:]
+    if len(gen.messages) > 100:
+        gen.messages = gen.messages[0:1] + gen.messages[-95:]
+        gen.save_message = gen.save_message[-95:]
     
 
 

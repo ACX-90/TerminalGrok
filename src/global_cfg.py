@@ -100,6 +100,7 @@ def grok_fcomm_remote():
 # the file path for agent to output tool command and thought when grok_use_fileio switch is on
 grok_fcomm_out = f"{fcomm_dir}{path_sep}reply.grok"
 grok_fcomm_out_tele = f"{fcomm_dir}{path_sep}reply_tele.grok"
+grok_fcomm_out_tele_active = f"{fcomm_dir}{path_sep}send_tele.grok"
 grok_fcomm_out_table = [
     grok_fcomm_out,
     grok_fcomm_out_tele,
@@ -108,9 +109,9 @@ grok_fcomm_out_table = [
 grok_token_file = f"{token_dir}{path_sep}grok.token"
 
 # --- Communication Protocol Markers ---
-grok_fcomm_done = "\n<GROK status=DONE></GROK>"
-grok_fcomm_end = "\n<GROK status=END></GROK>"
-grok_fcomm_start = "\n<GROK status=START></GROK>"
+grok_fcomm_done = "\n<GROK status=done/>"
+grok_fcomm_end = "\n<GROK status=end/>"
+grok_fcomm_start = "\n<GROK status=start/>"
 grok_tool_req_flag = "<tools_req/>"
 
 # --- Ensure necessary directories exist ---
