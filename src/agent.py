@@ -220,21 +220,11 @@ def tool_router(user_input):
     gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
     aux_reply = aux_completion.choices[0].message.content.strip().lower()
     gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
-    pos_cnt = 0
-    neg_cnt = 0
-    for i, value in enumerate(aux_reply):
-        try:
-            if int(value) & 1 == 1:
-                pos_cnt += 1
-            else:
-                neg_cnt += 1
-        except:
-            pass
-    if pos_cnt > neg_cnt:
-        gen.debug_out(f"Tool router decides to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
+    if "yes" in aux_reply:
+        gen.debug_out("Tool router decides to activate tools.")
         return 1
     else:
-        gen.debug_out(f"Tool router decides NOT to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
+        gen.debug_out("Tool router decides NOT to activate tools.")
         return 0
 
 # grok_chat:
