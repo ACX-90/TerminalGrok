@@ -68,6 +68,8 @@ def update_task(task_name, content):
       and should be in xml format, if the task file does not exist, create a new one, 
       if the task file already exists, update"""
     task_path = f"{taskdir}/{task_name}.task"
+    content = content.strip()
+    content = content.strip('"')  # remove leading and trailing quotes if exist
     try:
         ET.fromstring(content)
     except ET.ParseError as e:

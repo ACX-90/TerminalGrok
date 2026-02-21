@@ -94,8 +94,8 @@ def execute_task(load_task, current_task, task_path, taskfile):
             exec_info += f' Per {interval_seconds} seconds'
         else:
             exec_info = f"(Once)"
-        with open(agent.grok_fcomm_in_task, "w") as f:  # assuming 'agent' is available in scope
-            f.write(f"Scheduled Task {exec_info}:\n{action_text}\n<GROK status=start></GROK>")
+        with open(glb.grok_fcomm_in_task, "w") as f:  # assuming 'agent' is available in scope
+            f.write(f"<scheduled_task info='{exec_info}'>\n{action_text}</scheduled_task>\n{glb.grok_fcomm_start}")
             
     # ------------------ Post-execution cleanup / update ------------------
     if not is_loop_enabled:

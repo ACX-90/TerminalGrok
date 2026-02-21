@@ -180,10 +180,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # handle the message and send reply if needed
                 with open(glb.grok_fcomm_in_tele, 'w') as f:
                     f.write(update.message.text)
-                    f.write(glb.grok_fcomm_start)
+                    f.write('\n' + glb.grok_fcomm_start)
                 grok_handling = 1
             else:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1)
+                print("-")
         else:
             if os.path.isfile(glb.grok_fcomm_out_tele):
                 with open(glb.grok_fcomm_out_tele, 'r') as f:
@@ -195,7 +196,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     done = 1
                     with open(glb.grok_fcomm_out_tele, 'w') as f:
                         f.write("")
-                elif fcomm_rx.find(glb.grok_fcomm_end) >= 0:
+                if fcomm_rx.find(glb.grok_fcomm_end) >= 0:
                     fcomm_rx = fcomm_rx.replace(glb.grok_fcomm_end, '')
                     end = 1
                     with open(glb.grok_fcomm_out_tele, 'w') as f:
@@ -218,7 +219,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         grok_handling = 0
                         return
             else:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(1)
+                print("*")
 
 # echo:
 # a handler function when telegram bot receives a normal message (not command), 
@@ -250,6 +252,10 @@ async def bot_daemon_send_message(context: ContextTypes.DEFAULT_TYPE):
         return
     with open(glb.grok_fcomm_out_tele_active, 'r') as f:
         fcomm_tx = f.read()
+        if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
+            fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
+        if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
+            fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
         if fcomm_tx.find(glb.grok_fcomm_start) >= 0:
             fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_start, '')
             fcomm_tx = fcomm_tx.strip()
@@ -342,5 +348,5 @@ def execute_telecom_command(agent_cmd):
     tool_telecom_send_target = target
     with open(glb.grok_fcomm_out_tele_active, 'w') as f:
         f.write(message)
-        f.write(glb.grok_fcomm_start)
+        f.write('\n' + glb.grok_fcomm_start)
     return "Telecom tool: Successfully sent the message."
