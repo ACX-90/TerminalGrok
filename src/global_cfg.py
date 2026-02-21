@@ -26,12 +26,14 @@ Author: [ACX-90]
 Version: 1.0
 Date: [2026/02/20]
 """
-
 import os
+import sys
+import platform
+
 # Global configuration variables
-global_debug = 1
+global_debug = 0
 # debug mode switch, set to 1 to print debug info
-debug = 1
+debug = 0
 # debug json switch, if set to 1, the raw json messages sent to and received from grok will be printed
 # in terminal for debugging,
 debug_json = 1     
@@ -41,18 +43,16 @@ grok_use_fileio = 1
 # confirm_need switch, if set to 1, the agent will ask for user confirm before executing tool command
 confirm_need = 0
 
-
 # --- Global configuration from OS ---
 # Notice: these environment variables should be set in the OS before running the program
 # by launching the program by start.bat or start.sh which sets the environment variables, 
 # or by setting the environment variables in the terminal before launching the program
 if global_debug:
     os.environ['USERNAME'] = "TestUser"
-    os.environ['run_environment'] = "windows"
     os.environ['workspace'] = "E:\\_Workspace\\GitHub\\TerminalGrok"
 
 username = os.getenv('USERNAME')
-os_type = os.getenv('run_environment')
+os_type = sys.platform.lower()
 workspace = os.getenv('workspace')
 
 if os_type.startswith("win"):
@@ -103,15 +103,16 @@ grok_fcomm_out_tele = f"{fcomm_dir}{path_sep}reply_tele.grok"
 grok_fcomm_out_tele_active = f"{fcomm_dir}{path_sep}send_tele.grok"
 grok_fcomm_out_table = [
     grok_fcomm_out,
-    grok_fcomm_out_tele,
+    grok_fcomm_out_tele_active,
 ]
 
 grok_token_file = f"{token_dir}{path_sep}grok.token"
 
 # --- Communication Protocol Markers ---
-grok_fcomm_done = "\n<GROK status=done/>"
-grok_fcomm_end = "\n<GROK status=end/>"
-grok_fcomm_start = "\n<GROK status=start/>"
+grok_fcomm_done = "<GROK status=done/>"
+grok_fcomm_end = "<GROK status=end/>"
+
+grok_fcomm_start = "<GROK status=start/>"
 grok_tool_req_flag = "<tools_req/>"
 
 # --- Ensure necessary directories exist ---

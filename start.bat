@@ -2,8 +2,8 @@
 setlocal EnableDelayedExpansion
 cd %~dp0
 
-set "workspace=E:\_Workspace\GitHub\TerminalGrok"
-::set "workspace=E:\_Workspace\TerminalGrok"
+:: set "workspace=E:\_Workspace\GitHub\TerminalGrok"
+set "workspace=E:\_Workspace\Trok"
 
 if not exist %workspace% (
     mkdir %workspace%
@@ -26,6 +26,7 @@ if not exist %workspace%\venv (
 )
 
 if not %cd% equ %workspace% (
+    xcopy "%~dp0\config\" "%workspace%\config\" /q /y
     xcopy "%~dp0\src\" "%workspace%\src\" /q /y
     xcopy "%~dp0\*.bat" "%workspace%\" /q /y
 )

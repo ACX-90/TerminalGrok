@@ -241,12 +241,10 @@ def debug_json_out(data):
 # output done flag to fcomm file
 # the remote terminal can print data
 def grok_done():
-    print(f"--- grok_done called, output done flag to fcomm file ---")
     myprint_fcomm(glb.grok_fcomm_done)
 
 # grok_end:
 # output end flag to fcomm file
 # the remote terminal can stop waiting
 def grok_end():
-    print(f"--- grok_end called, output end flag to fcomm file ---")
     myprint_fcomm(glb.grok_fcomm_end)

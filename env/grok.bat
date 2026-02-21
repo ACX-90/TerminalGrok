@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set "workspace=E:\_Workspace\GitHub\TerminalGrok"
+set "workspace=E:\_Workspace\Trok"
 set "reply=%workspace%\fcomm\reply.grok"
 set "msg=%workspace%\fcomm\msg.grok"
 set "endkey=<GROK status=end/>"
