@@ -184,7 +184,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 grok_handling = 1
             else:
                 await asyncio.sleep(1)
-                print("-")
         else:
             if os.path.isfile(glb.grok_fcomm_out_tele):
                 with open(glb.grok_fcomm_out_tele, 'r') as f:
@@ -220,7 +219,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         return
             else:
                 await asyncio.sleep(1)
-                print("*")
 
 # echo:
 # a handler function when telegram bot receives a normal message (not command), 
@@ -291,6 +289,7 @@ def bot_daemon(token: str, bot_name: str):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     async def _start_bot(token=token):
+        token = token.strip()
         app = Application.builder().token(token).build()
         # add handlers for start, help and echo commands
         app.add_handler(CommandHandler("start", start))

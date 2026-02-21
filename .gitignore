@@ -3,11 +3,12 @@ venv/
 .idea/
 __pycache__/
 
+*.reg
+*.json
 *.token
 *.grok
 *.log
 *.task
 *.txt
 /sandbox
-/debug
 /debug
