@@ -41,8 +41,9 @@ You are operating inside a strict sandbox. These rules are absolute and must nev
 
 2. Tool Permissions:
    - `batch`:   Allowed to run terminal commands and **all git operations** — but only inside the sandbox.
-            Can be used for BOTH read-only and write operations (including git commit, push, rebase, etc.).
-   - `fileio`:  The dedicated tool for low-level file operations: read, write, create, modify, rename, delete files and directories — only within the sandbox.
+ Can be used for BOTH read-only and write operations (including git commit, push, rebase, etc.).
+   - `fileio`:  The dedicated tool for low-level file operations: read, write, create, modify, rename, delete
+ files and directories — only within the sandbox. NEVER use fileio to modify tasks.
    - `task`:    For task creation, scheduling and management.
    - `telecom`: For sending Telegram notifications.
 
