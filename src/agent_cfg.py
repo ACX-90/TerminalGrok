@@ -89,7 +89,7 @@ msg_tool_router = {
     "content": (
         """
 You are a tool call router, your task is to determine whether user's request requires tool calls,
-**if tool calls are required, output 13579, else output 24680,**
+**if tool calls are required, output 'yes', else output 'no',**
  you must not output anything else other than these two numbers, 
  and you must not output any explanation or description, just the number, 
  and the number must be in a single line, and there should be no other characters or symbols in the line
