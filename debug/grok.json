@@ -1,0 +1,75 @@
+
+
+==== Message 0 ========================
+
+{
+    "role": "user",
+    "content": "@TerminalGrok_bot test placeholder message"
+}
+
+==== Message 1 ========================
+
+{
+    "id": "gen-1771660607-uTdkjmBK4sj1oVt6BIqY",
+    "choices": [
+        {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+                "content": "Hello, TestUser. Test received loud and clear. Sandbox is locked down and ready for action. What's next?",
+                "refusal": null,
+                "role": "assistant",
+                "annotations": null,
+                "audio": null,
+                "function_call": null,
+                "tool_calls": null,
+                "reasoning": "First, the policy: Greet the user by name at the start of the very first message in a new conversation. User's name is TestUser. Memory says no previous conversation, so this is the first message.\n",
+                "reasoning_details": [
+                    {
+                        "format": "xai-responses-v1",
+                        "index": 0,
+                        "type": "reasoning.summary",
+                        "summary": "First, the policy: Greet the user by name at the start of the very first message in a new conversation. User's name is TestUser. Memory says no previous conversation, so this is the first message.\n"
+                    },
+                    {
+                        "id": "rs_7c62a661-3c13-9bc8-f169-62dd41f531ba",
+                        "format": "xai-responses-v1",
+                        "index": 0,
+                        "type": "reasoning.encrypted",
+                        "data": "poL0FqlAKcDp5e19pPXvb51/jlVJF66xBY/SpqVKQk8QxRoXpODGm4novOfsZVTPdYVFtapBE69DNwrIPcSKRA/4y9sQjbaGP51dgIIKErPkxb2OF9UNvJe2sdIP7oAI+xRMlUmiOX3xc/+ayicxBb6Cik0jmkOMk4FZwwz2MRycL5MPtfyJyV5xPys1xkkx6isFqZTv81xNUzZzosxqrv3zDXIga5Wk8vq95JVzXzrs+snDSMbScS6Ax9OEzXm04gcRAzK0/g6B/SCUAyXPvpn0UYV5li5Y8l/x9TPoRm4BnbywCIr2JGRC9AgFlEng5cjZqBBP5gQxAkcSVvggAYxl7qgEXEzhVVt1+FhNigwBr1YMzmsCcytL7wcyfiU51MUN6CvXwnaX6sfC251WGK35kb+4fnGeEW3SRYRONK9EGl7YD3vdzzFqSH1sSFSaYuy6mtVyKPuPDcLYz5V1GU3QytILOXGb5wfmk86YqQJ7dhZgGoD19UG5cYKnu3DP8XIgKADM5pgPO9jHT41T3O7dtfhds9STbySsvIrYVbw3LojI87aDoeTjDUYQzuFzEqRgRCkE/vybULKDhNqfV0Ueu2KUCUa7akhXNjmihjOlEQE+25mvDT5/vHh3jKszrvRTWdU81cdMeiRJWW0E7bvVm7fwfMX5OU6oGenM7PFxJYkxx3HgUHGnQ4TWJsEU5e4iaSo10QFkFyLcDSx3ujFal0f7iaSwj0TaIUOB6viM3oYonlbRnJSFjUO5psBQv35MDO4kgvmqqkNIx5tKir+v1UJnLgGEvxGmiPS8XbBFdWwXisGRvrMoDU+MHBsN1ReL6vKDifptIOITsYBUggjFjidafq/CRGUTc5rzAevcCgEeU636rM04ZVw/ec4hm3XdxPIeYrL9sxOtHPyLWM9E2B2+TODUSD/6E/8ocxtKjFLNdo+Kj35FH1KVost5DVe3q6uORwIfNXY2g+jJ+Ay0S/PI8v+EaV4UrUW0LhmnE1Iv6ANAuIBDF+k+d+9lQNNmtzT/2dVXn1GN/49UvzoTUwfc/j87vZQB8lJW36Ls9ptnGxTp+Y1VZAirZwZHkRu6bHBkOkAW2RL7zYlLW1+XD6U0hO5VPiIELDZQEjULRokwDnLGHGT1mDexcEwMIEv6NNeSpWyrMcQMWHhYRjrZrTkJvw4DgyFYmsTfqk3db8w+Q2odDO/2EhtS8XvwNtUpNNgw5ms/0rMKn6yaSRO8OKcZyjv+ISfRf5Pye9I5aoSCWujzsf8lTkgSY0R5Mkmr+eJGy+bO"
+                    }
+                ]
+            },
+            "native_finish_reason": "completed"
+        }
+    ],
+    "created": 1771660607,
+    "model": "x-ai/grok-4.1-fast",
+    "object": "chat.completion",
+    "service_tier": null,
+    "system_fingerprint": null,
+    "usage": {
+        "completion_tokens": 227,
+        "prompt_tokens": 708,
+        "total_tokens": 935,
+        "completion_tokens_details": {
+            "accepted_prediction_tokens": null,
+            "audio_tokens": null,
+            "reasoning_tokens": 204,
+            "rejected_prediction_tokens": null
+        },
+        "prompt_tokens_details": {
+            "audio_tokens": null,
+            "cached_tokens": 707
+        },
+        "cost": 0.00014905,
+        "is_byok": false,
+        "cost_details": {
+            "upstream_inference_cost": 0.00014905,
+            "upstream_inference_prompt_cost": 3.555e-05,
+            "upstream_inference_completions_cost": 0.0001135
+        }
+    },
+    "provider": "xAI"
+}
