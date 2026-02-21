@@ -1,4 +1,47 @@
 """
+Agent Configuration Module Documentation
+OVERVIEW:
+This module defines the complete configuration for the Grok terminal assistant agent,
+including LLM models, system prompts, tool definitions, and routing logic.
+MODELS:
+- main_model: "x-ai/grok-4.1-fast" (primary LLM for user interactions)
+- aux_model: "google/gemini-2.0-flash-lite-001" (auxiliary model for tool routing)
+- code_model: "x-ai/grok-code-fast-1" (specialized code generation model)
+SYSTEM PROMPTS:
+- msg_system: Core system prompt (~620 base tokens + memories)
+    - Establishes Grok identity and sandbox constraints
+    - Defines strict safety rules for file/command operations
+    - Specifies tool usage policies and response style
+    - Enforces sandbox boundary enforcement
+- msg_tool_router: Tool call decision router (~80 tokens)
+    - Classifies user requests as tool-requiring or conversational
+    - Binary output: "yes" or "no" only
+    - Routes to: batch, fileio, task, or telecom tools
+- msg_content_compress: Conversation history compressor (~460 base tokens + memories)
+    - Preserves 100% technical content accuracy (URLs, paths, commands, code)
+    - Aggressively removes filler and repetition
+    - Target compression: 35-55% of original length
+TOOL DEFINITIONS:
+- tool_batch: Platform-specific shell command execution (~200 tokens)
+    - Unix: bash commands; Windows: batch commands
+    - Includes git operations (commit, push, rebase, etc.)
+    - Sandboxed to glb.sandbox directory only
+- tool_fileio: File I/O operations (~350 tokens)
+    - Operations: write, read, append, delete, insert_lines, delete_lines, 
+        replace_lines, replace_symbol
+    - Restricted to sandbox directory and subdirectories
+- tool_task: Task scheduling and management (~250 tokens)
+    - Operations: info, list, delete, update
+    - XML-based task format with countdown, action, and loop parameters
+- tool_telecom: Telegram notification delivery (~150 tokens)
+    - Operations: send messages to user or group chat
+    - Asynchronous delivery, non-blocking execution
+TOKEN COST ESTIMATES:
+- msg_system: ~620 tokens (base)
+- msg_tool_router: ~80 tokens
+- msg_content_compress: ~460 tokens (base)
+- Total tools: ~950 tokens per request
+- Total system prompts: ~1160 tokens (base, excluding memories)
 Configuration module for the Grok terminal assistant agent.
 This module sets up the necessary configurations for the Grok AI assistant, including:
 - Loading the API token from a file.
@@ -21,9 +64,8 @@ import global_cfg as glb
 # bytedance = 4.5 seconds
 # google gemini 2.0 flash lite within 3 seconds
 # grok4.1 fast about 5 seconds
-
-main_model = "x-ai/grok-4.1-fast"          # Grok-4.1-Fast from openrouter
-aux_model = "google/gemini-2.0-flash-lite-001"     # auxiliary model for tool calls, can be set to a cheaper model if needed
+main_model = "x-ai/grok-4.1-fast"                  # Grok-4.1-Fast from openrouter
+aux_model = "google/gemini-2.0-flash-lite-001"     # auxiliary model for general purpose use, can be set to a cheap and fast model if needed
 code_model = "x-ai/grok-code-fast-1"  # code-dedicated model for better code understanding and generation, can be set to a cheaper model if needed
 
 # --- System prompt ---
@@ -84,6 +126,7 @@ Do not include this flag in normal conversational replies.
 }
 
 # --- Tool Router Prompt ---
+# msg_tool_router costs approximately (280 + user_input) tokens when sent to the LLM vendor.
 msg_tool_router = {
     "role": "system",
     "content": (
@@ -101,6 +144,47 @@ You are a tool call router, your task is to determine whether user's request req
  - 'telecom' for sending Telegram messages to the user or group chat.
  Remember to strictly follow the output format requirements, and do not output anything other than the 
  specified numbers.
+"""
+    )
+}
+
+# --- Conversation Compression Prompt ---
+# msg_content_compress costs approximately (460 + memories) tokens when sent to the LLM vendor.
+msg_content_compress = {
+    "role": "system",
+    "content": (
+        """
+You are an expert "Chat History Compressor". Your sole task is to significantly condense 
+the provided conversation history while preserving all critical information.
+### HARD RULES (Never Violate):
+1. **100% Verbatim Preservation of Technical Content**
+   - Every URL (http/https/ftp/etc.), file path (absolute or relative), code snippet, terminal
+     command, API endpoint, directory structure, filename, error message, or any technical 
+     string must remain **exactly 100% unchanged**. Do not modify, abbreviate, summarize, 
+     shorten, or omit even a single character.
+2. **Intelligent & Aggressive Compression**
+   - Remove all filler, greetings, pleasantries, confirmations, thanks, repetitions, and 
+   meaningless exchanges (e.g. "okay", "got it", "thanks", "understood", "sure", "no problem",
+     repeated acknowledgments).
+   - Merge multiple back-and-forth turns on the same topic into one concise, clear statement.
+   - Preserve every core question, key answer, decision, action item, important data, number,
+     fact, conclusion, and any context needed for full understanding.
+3. **Structure & Flow Preservation**
+   - Keep original speaker labels (User:, Assistant:, Human:, AI:, etc.) and exact 
+   chronological order.
+   - Retain any timestamps if present.
+   - Maintain the original markdown formatting, code blocks, lists, and readability.
+4. **Compression Target**
+   - Aim for 35–55% of the original length (maximum compression while staying safe). 
+   - If the conversation is very short (<200 words), perform only light cleaning.
+   - When in doubt whether something is important, always keep it.
+### OUTPUT REQUIREMENTS:
+- Output **ONLY** the compressed conversation.
+- Do **NOT** add any introductions, explanations, titles ("Compressed version:"), notes, or
+ closing text whatsoever.
+- Start directly with the first line of the compressed dialogue.
+- Preserve the original formatting style.
+Now compress the conversation the user will provide.
 """
     )
 }
