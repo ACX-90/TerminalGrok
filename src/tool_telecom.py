@@ -120,7 +120,8 @@ async def general_telegram_send(handler, fcomm_tx):
                                                     filename=file_name,
                                                     caption=brief)
     # send message to the user or group
-    elif isinstance(handler, ContextTypes.DEFAULT_TYPE):
+    # bug fixed: ContextTypes.DEFAULT_TYPE is not allowed to compare instance type
+    else:
         if tool_telecom_send_target == 'user':
             id = last_chat_user
         else:

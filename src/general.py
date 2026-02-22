@@ -354,6 +354,9 @@ def reset_session():
     initial = 1
     ret = "Reset Session $"
     myprint(ret, end=' ')
+    save_message.clear()
+    global messages    
+    messages = copy.deepcopy(default_message)
     return ret
 
 def quit_session():
