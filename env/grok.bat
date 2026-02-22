@@ -8,20 +8,19 @@ set "endkey=<GROK status=end/>"
 set "rxkey=<GROK status=done/>"
 set "txkey=^<GROK status=start/^>"
 
-:: poll
-if "%~1" equ "" (
-	if exist %reply% (
-		echo Grok has message
-		powershell -NoProfile -Command "Get-Content -LiteralPath '%reply%' | Where-Object { $_.Trim() -notmatch '^(<GROK status=done/>|<GROK status=end/>)$' }"
-		del %reply%
-	) else (
-		echo Grok is not ready
-	)
-	exit /b 0
+:: check if grok has message
+if exist %reply% (
+	echo Grok has message.
+	powershell -NoProfile -Command "Get-Content -LiteralPath '%reply%' | Where-Object { $_.Trim() -notmatch '^(<GROK status=done/>|<GROK status=end/>)$' }"
+	del %reply%
+) else (
+	echo Grok is not ready.
 )
 
-:: delete previous grok output
-if exist %reply% del "%reply%"
+:: poll status only
+if "%~1" equ "" (
+	exit /b 0
+)
 
 :: send message to grok
 echo %* > %msg%

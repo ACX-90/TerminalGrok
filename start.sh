@@ -35,7 +35,6 @@ if [ ! -f "${workspace}/tokens/agent00.token" ]; then
     echo "Your API KEY saves in ${workspace}/tokens/agent00.token"
 fi
 
-
 if [[ ${PWD} != ${workspace} ]] then
     if [ ! -d "${workspace}/src" ]; then
     	mkdir "${workspace}/src"
@@ -48,8 +47,11 @@ if [[ ${PWD} != ${workspace} ]] then
     cp *.sh "${workspace}/"
 fi
 
+sed -i "s|workspace = \".*\"|workspace = \"${workspace}\"|" ./env/grok.py
+sudo cp "./env/grok.py" /usr/bin/grok
+
 if [ ! -d "${workspace}/venv" ]; then
-    echo "Setup Python"
+    echo "Install python3.12-venv and create virtual environment"
     sudo apt install python3.12-venv
     python3.12 -m venv "${workspace}/venv"
     "${workspace}/venv/bin/pip" install "openai"
