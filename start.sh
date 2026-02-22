@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# config PROXY
+# config PROXY for clash
 unset ALL_PROXY
 unset all_proxy
 unset http_proxy
@@ -14,12 +14,13 @@ export https_proxy="http://127.0.0.1:7890"
 # general
 export workspace="/home/${USERNAME}/TerminalGrok"
 
+# create workspace
 if [ ! -d "${workspace}" ]; then
     echo "Creating Grok"
     mkdir "${workspace}"
 fi
 
-# enter API key
+# enter OpenRouter API key for Grok
 if [ ! -f "${workspace}/tokens/grok.token" ]; then
     read -p "Enter your OPENROUTER API_KEY: " api_key
     if [ ! -d "${workspace}/tokens" ]; then
@@ -29,12 +30,14 @@ if [ ! -f "${workspace}/tokens/grok.token" ]; then
     echo "Your API KEY saves in ${workspace}/tokens/grok.token"
 fi
 
+# enter Telegram API key for bot service
 if [ ! -f "${workspace}/tokens/agent00.token" ]; then
     read -p "Enter your Telegram API_KEY: " api_key
     echo ${api_key} > ${workspace}/tokens/agent00.token
     echo "Your API KEY saves in ${workspace}/tokens/agent00.token"
 fi
 
+# copy files to workspace
 if [[ ${PWD} != ${workspace} ]] then
     if [ ! -d "${workspace}/src" ]; then
     	mkdir "${workspace}/src"
@@ -47,9 +50,12 @@ if [[ ${PWD} != ${workspace} ]] then
     cp *.sh "${workspace}/"
 fi
 
+# modify grok.py to workspace path and copy to /usr/bin
+# enable to call grok anywhere in terminal
 sed -i "s|workspace = \".*\"|workspace = \"${workspace}\"|" ./env/grok.py
 sudo cp "./env/grok.py" /usr/bin/grok
 
+# install python dependencies in virtual environment
 if [ ! -d "${workspace}/venv" ]; then
     echo "Install python3.12-venv and create virtual environment"
     sudo apt install python3.12-venv
@@ -61,6 +67,7 @@ if [ ! -d "${workspace}/venv" ]; then
     echo "Python virtual environment done"
 fi
  
+# start a grok instance
 echo "Start Grok"
 cd "${workspace}"
 "${workspace}/venv/bin/python" "${workspace}/src/main.py"

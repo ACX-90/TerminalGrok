@@ -109,18 +109,18 @@ def print_agent_tool(think, command):
         gen.myprint(command)
         gen.myprint("="*60)
     else:
-        gen.myprint(f"Grok's thought: {think}\n")
-        gen.myprint("COMMAND TO EXECUTE:\n")
-        gen.myprint(command)
+        if len(think) > 300:
+            gen.myprint(f"<grok_tele_file name=\"grok_thought.txt\">{think}</grok_tele_file>\n")
+        else:
+            gen.myprint(f"Grok's thought: {think}\n")
+        gen.myprint(f"COMMAND TO EXECUTE:\n{command}")
     if glb.confirm_need:
         gen.myprint("Execute? (y/no and reasons): ", end="", flush=True)
 
 # print_welcome:
 # print welcome info and instructions for user
 def print_welcome():
-    gen.myprint(f"/r: Reset session  /q: Quit\n"
-             "/m: Save memory    /cm: Clear memory\n"
-             "/b: Grok Batch     /c: Need Confirm  /n: No Confirm")
+    gen.myprint(gen.command_description)
 
 # get_user_input:
 # get user input from terminal or file, with grok_use_fileio switch
@@ -136,53 +136,23 @@ def get_user_input():
 # preprocess user input, return a flag to indicate whether to continue the loop directly
 def preprocess_user_input(user_input):
     continue_flag = 0
-    format = user_input.lower()
-    tool_activated = 0
-    if format.startswith('/r'):
-        gen.initial = 1
-        gen.myprint("Reset Session $", end=' ')
-        continue_flag = 1
-    elif format.startswith('/q'):
-        gen.myprint("Quit Session $", end=' ')
-        gen.grok_end()
-        exit(0)
-    elif format.startswith('/m'):
-        with open(glb.mem_file, 'a', encoding="utf-8") as f:
-            f.write("".join(gen.save_message))
-        gen.save_message.clear()
-        gen.myprint("Set memories $", end=' ')
-        continue_flag = 1
-    elif format.startswith('/cm'):
-        with open(glb.mem_file, 'w', encoding="utf-8") as f:
-            f.write('')
-        gen.myprint("Clear Memories $", end=' ')
-        continue_flag = 1
-    elif format.startswith('/c'):
-        glb.confirm_need = 1
-        gen.myprint("Confirm Need $", end=' ')
-        continue_flag = 1
-    elif format.startswith('/n'):
-        glb.confirm_need = 0
-        gen.myprint("No Confirm $", end=' ')
-        continue_flag = 1
-    elif format.startswith('/b '):
-        # example: $ grok /b get dir of sandbox
-        # and grok will try to use batch tool to get the dir of sandbox,
-        # and print the command and thought for user confirm
-        gen.myprint("Tool Required...", end=' ')
+    format = user_input.lower().strip()
+    if format.startswith("/"):
+        cmd1 = format[1:2]
+        cmd2 = format[1:3]
+        if cmd1 in gen.command_handler:
+            gen.command_handler[cmd1]()
+        elif cmd2 in gen.command_handler:
+            gen.command_handler[cmd2]()
+        else:
+            gen.myprint("Unknown command, please try again.")
         gen.grok_done()
-        user_input = user_input[3:]
-        tool_activated = 1
-
-    if not continue_flag:
+        continue_flag = 1
+    else:
         # use another model to judge whether the user wants to use tools.
-        if not tool_activated:
-            tool_activated = tool_router(user_input)
-        if tool_activated:
-            gen.tool_used_last_time = 1
-            gen.current_tools = gen.all_avaliable_tools
+        tool_router(user_input)
+
         # save user input to conversation, and save_message for potential saving to mem file
-        user_input
         gen.messages.append({"role":"user", "content": user_input})
         gen.save_message.append(f"<user>{user_input}</user>\n")
         gen.debug_json_out({"role":"user", "content": user_input})
@@ -210,6 +180,8 @@ def get_tool_confirm_info():
 # tool_router:
 # route the tool call to corresponding tool handler based on tool name
 def tool_router(user_input):
+    if not gen.tool_enable_flag:
+        return 0
     time1 = time.time()
     aux_completion = client.chat.completions.create(
         model=cfg.aux_model,
@@ -217,24 +189,15 @@ def tool_router(user_input):
         temperature=0.0,
     )
     time_elapsed = time.time() - time1
-    gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
     aux_reply = aux_completion.choices[0].message.content.strip().lower()
+    gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
     gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
-    pos_cnt = 0
-    neg_cnt = 0
-    for i, value in enumerate(aux_reply):
-        try:
-            if int(value) & 1 == 1:
-                pos_cnt += 1
-            else:
-                neg_cnt += 1
-        except:
-            pass
-    if pos_cnt > neg_cnt:
-        gen.debug_out(f"Tool router decides to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
-        return 1
+    if aux_reply.lower().find("yes") >= 0:
+        gen.tool_used_last_time = 1
+        gen.current_tools = gen.all_avaliable_tools
     else:
-        gen.debug_out(f"Tool router decides NOT to activate tools for this user input. ({pos_cnt} positive vs {neg_cnt} negative)")
+        gen.tool_used_last_time = 0
+        gen.current_tools = []
         return 0
 
 # grok_chat:
@@ -242,7 +205,7 @@ def tool_router(user_input):
 def grok_chat():
     try:
         tool_choice = "auto" if gen.current_tools else 0
-        temperature = 0.0 if gen.current_tools else 0.5
+        temperature = 0.2 if gen.current_tools else 0.7
         gen.debug_out(f"Grok is thinking, temperature={temperature}, tool_choice={tool_choice}...")
         time1 = time.time()
         completion = client.chat.completions.create(
@@ -355,19 +318,15 @@ def tool_handle(reply):
                 gen.tool_result = f"Tool execution rejected by user, confirm_info: {confirm_info}"
         else:
             gen.tool_result = f"ERROR: no handler for tool {tool_call.function.name}."
-        gen.myprint(gen.tool_result)
+        if glb.grok_fcomm_remote() and len(gen.tool_result) > 300:
+            gen.myprint(f"<grok_tele_file name=\"grok_tool_result.txt\">{gen.tool_result}</grok_tele_file>\n")
+        else:
+            gen.myprint(gen.tool_result)
         gen.save_message.append(f"<tool_result>{gen.tool_result}</tool_result>\n")
         new_message = {"role": "tool", "tool_call_id": tool_call.id, "content": gen.tool_result}
         gen.messages.append(new_message)
         gen.debug_json_out(new_message)
         gen.grok_done()
-        
-# has_tools_req_tag:
-# check if the reply from grok contains the tool request tag, which indicates that grok 
-# requires tools for next round
-def has_tools_req_tag(text: str) -> bool:
-    pattern = r'<tools_req\s*/?>|<tools_req\b[^>]*>.*?</tools_req>'
-    return bool(re.search(pattern, text, re.DOTALL | re.IGNORECASE))
 
 # chat handle:
 # handle the normal chat reply from grok, save the content to conversation and print it,
@@ -380,7 +339,3 @@ def chat_handle(reply):
     else:
         gen.myprint(f"{print_content}\n$ ")
     gen.grok_done()
-    if has_tools_req_tag(print_content):
-        gen.debug_out("Grok requires tools for next round, set tool_used_last_time to 1"
-                  " to let it decide to use tools or not once again.")
-        gen.tool_used_last_time = 1
