@@ -20,12 +20,14 @@ Design notes:
     encapsulate in an object if concurrent access is required.
 - Keep helpers minimal to avoid extra dependencies and simplify testing.
 """
+import copy
 import json
 import os
 import xml.etree.ElementTree as ET
 import global_cfg as glb
 import agent_cfg as cfg
 
+reset_flag = ''
 # pause flag for the daemon, when daemon_pause is 1, the daemon will pause and not execute the
 # tasks, when daemon_pause is 0, the daemon will run normally.
 # need to run daemon before grok get user input, so that the daemon can execute the tasks in
@@ -51,7 +53,7 @@ compress_message = [
 # some formatting, but in the future it can be modified to save more info or in a different format
 save_message = []
 # messages is the current conversation history, which will be sent to grok for each chat request,
-messages = default_message
+messages = copy.deepcopy(default_message)
 # a flag to indicate whether the agent used tool last time, 
 # if yes, the agent will not ask for user input, but directly decide to use tools or not once 
 # again, which can be useful when the agent need to use tools for several times in a row
@@ -59,6 +61,10 @@ tool_used_last_time = 0
 # a variable to store the tool result, which can be used for debugging and also can be sent back
 # to grok as tool call reply content
 tool_result = ""
+# enable or disable tool use, when tool_enable is 1, the agent can use tools, when tool_enable is 0,
+# the tools will be disabled and tool router will not be called, which can be useful when user want 
+# to have a pure chat with grok without tool use
+tool_enable_flag = 1
 
 # tools that the agent can use, 
 # currently only batch tool is implemented,
@@ -149,6 +155,87 @@ def dict_to_xml(data, output_file):
     _indent(root)
     tree = ET.ElementTree(root)
     tree.write(output_file, encoding='utf-8', xml_declaration=True)
+
+# split_unquoted_comma:
+# split a string by comma, but ignore the comma in quotes,
+# the function will return a list of strings
+def split_unquoted_comma(s: str, strip=True) -> list[str]:
+    if not s:
+        return []
+    parts = []
+    current = []
+    in_quotes = False
+    i = 0
+    while i < len(s):
+        char = s[i]
+        if char == '\\' and i + 1 < len(s) and s[i + 1] == '"':
+            current.append('"')
+            i += 2
+            continue
+        if char == '"':
+            in_quotes = not in_quotes
+            current.append(char)
+            i += 1
+            continue
+        if char == ',' and not in_quotes:
+            field = ''.join(current)
+            if strip:
+                field = field.strip()
+            parts.append(field)
+            current = []
+            i += 1
+            continue
+        current.append(char)
+        i += 1
+    if current:
+        field = ''.join(current)
+        if strip:
+            field = field.strip()
+        parts.append(field)
+    return parts
+
+# my_xml_parser:
+# a simple xml parser that can parse the xml in the format of <tag pars>content</tag>, 
+# where pars is a comma separated string of parameters, and content is the text content 
+# of the tag, the function will return a list of dictionaries, each dictionary represents
+#  a tag, and has two keys: "pars" and "content", the value of "pars" is a list of 
+# parameters, and the value of "content" is the text content of the tag, if there are 
+# multiple tags with the same name, they will be stored in a list under the same key
+def my_xml_parser(text, tag):
+    out = []
+    while 1:
+        pre_tag = f"<{tag}"
+        post_tag = f"</{tag}>"
+        index00 = text.find(pre_tag)
+        if index00 > 0:
+            out.append({
+                "content": {"#text": text[0:index00]},
+            })
+        if not index00 > -1:
+            text = text.strip()
+            if text:
+                out.append({
+                    "content": {"#text": text},
+                })
+            break
+        index01 = text.find(f">", index00)
+        if not index01 > index00:
+            break
+        par_text = text[index00+len(pre_tag):index01].strip()
+        if par_text:
+            pars = split_unquoted_comma(par_text)
+        else:
+            pars = []
+        index10 = text.find(post_tag, index01)
+        if not index10 > -1:
+            break
+        content = text[index01+1:index10].strip()
+        out.append({
+            "pars" : {"#list": pars},
+            "file_content" : {"#text": content}
+        })
+        text = text[index10+len(post_tag):].strip()
+    return out
 
 # get_cfg:
 # get configuration from cfg file, the cfg file should be in the format of "key=value", 
@@ -259,3 +346,79 @@ def grok_done():
 # the remote terminal can stop waiting
 def grok_end():
     myprint_fcomm('\n' + glb.grok_fcomm_end)
+
+
+# ================ Command Handlers =================
+def reset_session():
+    global initial
+    initial = 1
+    ret = "Reset Session $"
+    myprint(ret, end=' ')
+    save_message.clear()
+    global messages    
+    messages = copy.deepcopy(default_message)
+    return ret
+
+def quit_session():
+    grok_end()
+    myprint("Quit Session $", end=' ')
+    global reset_flag
+    reset_flag = "User Quit"
+    exit(0)
+
+def memory_save():
+    with open(glb.mem_file, 'a', encoding="utf-8") as f:
+        f.write("".join(save_message))
+    save_message.clear()
+    ret = "Memory Saved $"
+    myprint(ret, end=' ')
+    return ret
+
+def memory_clear():
+    with open(glb.mem_file, 'w', encoding="utf-8") as f:
+        f.write('')
+    ret = "Clear Memories $"
+    myprint(ret, end=' ')
+    return ret
+
+def confirm_enable():
+    glb.confirm_need = 1
+    ret = "Confirm Need $"
+    myprint(ret, end=' ')
+    return ret
+
+def confirm_disable():
+    glb.confirm_need = 0
+    ret = "No Confirm $"
+    myprint(ret, end=' ')
+    return ret
+
+def tool_enable():
+    global tool_enable_flag
+    tool_enable_flag = 1
+    ret = "Tool Enable $"
+    myprint(ret, end=' ')
+    return ret
+
+def tool_disable():
+    global tool_enable_flag
+    tool_enable_flag = 0
+    ret = "Tool Disable $"
+    myprint(ret, end=' ')
+    return ret
+
+command_handler = {
+    'r': reset_session,
+    'q': quit_session,
+    'ms': memory_save,
+    'mc': memory_clear,
+    'ce': confirm_enable, 
+    'cd': confirm_disable,
+    'te': tool_enable,
+    'td': tool_disable,
+}
+
+command_description = f"/r: Reset session    /q: Quit\n"\
+                       "/ms: Memory save     /mc: Memory clear \n"\
+                       "/ce: Confirm enable  /cd: Confirm disable\n"\
+                       "/te: Tool enable     /td: Tool disable\n"

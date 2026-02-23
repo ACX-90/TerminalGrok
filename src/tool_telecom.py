@@ -35,7 +35,8 @@ for name in cfg_telegram:
         agent_id_name_map.update({agent_id: name})
 
 tool_telecom_send_target = 'user'  # or 'group', decide whether to send message to user or group, if user, the bot will reply to the user who sent the message, if group, the bot will send message to the group defined in the configuration file
-last_chat_id = None  # the chat id of the last message received, used to reply to the user when tool_telecom_send_target is 'user'
+last_chat_user = None  # the chat id of the last user who sent a message, used to reply to the user when tool_telecom_send_target is 'user'
+last_chat_group = cfg_telegram['group']['id']  # the chat id of the last message received, used to reply to the user when tool_telecom_send_target is 'user'
 
 non_favored_reply_table = [
     "Fuck you bro!",
@@ -52,8 +53,9 @@ non_favored_reply_table = [
     "Motherfucker!",
 ]
 
-# split_message
+# split_message:
 # Cut pure text message to multiple segments suitable for Telegram (default limit 4096 characters).
+# no longer used, replace by text_to_file
 def split_message(text: str, max_length: int = 4096) -> list[str]:
     if len(text) <= max_length:
         return [text]
@@ -74,21 +76,73 @@ def split_message(text: str, max_length: int = 4096) -> list[str]:
         text = text[split_pos:].lstrip()
     return chunks
 
-
+# text_to_file:
+# convert too long text to txt file
 def text_to_file(text: str):
-    if len(text) > 1500:
-        if not os.path.isdir(f'{glb.workspace}/temp'):
-            os.makedirs(f'{glb.workspace}/temp')
-        file_name = f'answer_{int(time.time())}.txt'
-        reply_file = f'{glb.workspace}/temp/{file_name}'
-        with open(reply_file, 'w', encoding='utf-8') as f:
-            f.write(text)
-        i = text.find(' ', 200)
-        brief = text[:i] if i != -1 else text
-        return reply_file, file_name, brief
-    else:
-        return 0, 0, 0
+    remote_tx = gen.my_xml_parser(text, "grok_tele_file")
+    return remote_tx
+# if len(text) > 1500:
+#     if not os.path.isdir(f'{glb.workspace}/temp'):
+#         os.makedirs(f'{glb.workspace}/temp')
+#     file_name = f'answer_{int(time.time())}.txt'
+#     reply_file = f'{glb.workspace}/temp/{file_name}'
+#     with open(reply_file, 'w', encoding='utf-8') as f:
+#         f.write(text)
+#     i = text.find(' ', 200)
+#     brief = text[:i] if i != -1 else text
+#     return reply_file, file_name, brief
+# else:
+#     return 0, 0, 0
 
+# general_telegram_send:
+# a general function to send message to Telegram
+async def general_telegram_send(handler, fcomm_tx):
+    fcomm_tx = fcomm_tx.strip()
+    if fcomm_tx:
+        remote_tx = text_to_file(fcomm_tx)
+    else:
+        return
+    # reply to the user's message
+    if isinstance(handler, Update):
+        for seq in remote_tx:
+            if seq.__contains__("content"):
+                await handler.message.reply_text(seq["content"]["#text"])
+            else:
+                for key in seq["pars"]["#list"]:
+                    if key.find("name=") == 0:
+                        file_name = key[5:].strip("\"")
+                reply_file = f"{glb.workspace}{glb.path_sep}fcomm{glb.path_sep}{file_name}"
+                content = seq["file_content"]["#text"]
+                with open(reply_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                brief = content[:content.find(' ', 100)] + "..." if len(content) > 100 else content
+                await handler.message.reply_document(document=open(reply_file, 'rb'),
+                                                    filename=file_name,
+                                                    caption=brief)
+    # send message to the user or group
+    # bug fixed: ContextTypes.DEFAULT_TYPE is not allowed to compare instance type
+    else:
+        if tool_telecom_send_target == 'user':
+            id = last_chat_user
+        else:
+            id = last_chat_group
+        for seq in remote_tx:
+            if seq.__contains__("content"):
+                await handler.bot.send_message(chat_id=id, text=seq["content"]["#text"])
+            else:
+                for key in seq["pars"]["#list"]:
+                    if key.find("name=") == 0:
+                        file_name = key[5:].strip("\"")
+                reply_file = f"{glb.workspace}{glb.path_sep}fcomm{glb.path_sep}{file_name}"
+                content = seq["file_content"]["#text"]
+                with open(reply_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                brief = content[:content.find(' ', 100)] + "..." if len(content) > 100 else content
+                await handler.bot.send_document(chat_id=id, 
+                                                document=open(reply_file, 'rb'), 
+                                                filename=file_name, 
+                                                caption=brief) 
+            
 
 anti_flood_cnt = 0
 async def non_favored_access_reply(update: Update):
@@ -109,11 +163,11 @@ def tackle_non_favored_access(update: Update):
 
 # start:
 # a handler function when telegram bot receives a /start message
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tackle_non_favored_access(update) == 0:
         await non_favored_access_reply(update)
         return
-    await update.message.reply_text("Start: Hello! I'm Grok, your AI assistant. How can I help you today?")
+    await update.message.reply_text("Start: Hello! I'm Grok, your AI assistant. How can I /help you today?")
 
 # help_command:
 # a handler function when telegram bot receives a /help message
@@ -121,8 +175,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tackle_non_favored_access(update) == 0:
         await non_favored_access_reply(update)
         return
-    reply = "Help: valid commands are /start, /help, /q (quit), /r (reset), /m (print memory), /cm (clear memory)"
-    await update.message.reply_text()
+    reply = f"Help: Here are the commands you can use:\n{gen.command_description}"
+    await update.message.reply_text(reply)
+
+# reset_command:
+# a handler function when telegram bot receives a /r message, it will reset the conversation
+async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if tackle_non_favored_access(update) == 0:
+        await non_favored_access_reply(update)
+        return
+    await update.message.reply_text(gen.command_handler['r']())
 
 # quit_command:
 # a handler function when telegram bot receives a /q message, it will quit the bot
@@ -131,43 +193,56 @@ async def quit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await non_favored_access_reply(update)
         return
     await update.message.reply_text("Goodbye!")
-    gen.grok_end()
-    exit(0)
+    gen.command_handler['q']()
 
-# reset_command:
-# a handler function when telegram bot receives a /r message, it will reset the conversation
-async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if tackle_non_favored_access(update) == 0:
-        await non_favored_access_reply(update)
-        return
-    gen.initial = 1
-    await update.message.reply_text("Conversation reset.")
 
-# memory_command:
+# memory_save_command:
 # a handler function when telegram bot receives a /memory message, it will print the current conversation memory
-async def memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def memory_save_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tackle_non_favored_access(update) == 0:
         await non_favored_access_reply(update)
         return
-    with open(glb.mem_file, 'a', encoding="utf-8") as f:
-        f.write("".join(gen.save_message))
+    await update.message.reply_text(gen.command_handler['ms']())
 
-# clear_command:
+# memory_clear_command:
 # a handler function when telegram bot receives a /cm message, it will clear the conversation memory
-async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def memory_clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if tackle_non_favored_access(update) == 0:
         await non_favored_access_reply(update)
         return
-    with open(glb.mem_file, 'w', encoding="utf-8") as f:
-        f.write("")
-    await update.message.reply_text("Conversation memory cleared.")
+    await update.message.reply_text(gen.command_handler['mc']())
 
-# # batch_command:
-# # a handler function when telegram bot receives a /b message, it will execute a batch of commands defined in the configuration file
-# async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-#     if tackle_non_favored_access(update) == 0:
-#         await non_favored_access_reply(update)
-#         return
+# confirm_enable_command:
+# a handler function when telegram bot receives a /ce message, it will enable the confirm mode
+async def confirm_enable_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if tackle_non_favored_access(update) == 0:
+        await non_favored_access_reply(update)
+        return
+    await update.message.reply_text(gen.command_handler['ce']())
+
+# confirm_disable_command:
+# a handler function when telegram bot receives a /cd message, it will disable the confirm mode
+async def confirm_disable_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if tackle_non_favored_access(update) == 0:
+        await non_favored_access_reply(update)
+        return
+    await update.message.reply_text(gen.command_handler['cd']())
+
+# tool_enable_command:
+# a handler function when telegram bot receives a /te message, it will enable the tool use
+async def tool_enable_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if tackle_non_favored_access(update) == 0:
+        await non_favored_access_reply(update)
+        return
+    await update.message.reply_text(gen.command_handler['te']())
+
+# tool_disable_command:
+# a handler function when telegram bot receives a /td message, it will disable the tool use
+async def tool_disable_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if tackle_non_favored_access(update) == 0:
+        await non_favored_access_reply(update)
+        return
+    await update.message.reply_text(gen.command_handler['td']())
 
 # message_handler:
 # a handler function when telegram bot receives a normal message (not command),
@@ -187,33 +262,22 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             if os.path.isfile(glb.grok_fcomm_out_tele):
                 with open(glb.grok_fcomm_out_tele, 'r') as f:
-                    fcomm_rx = f.read()
+                    fcomm_tx = f.read()
                 done = 0
                 end = 0
-                if fcomm_rx.find(glb.grok_fcomm_done) >= 0:
-                    fcomm_rx = fcomm_rx.replace(glb.grok_fcomm_done, '')
+                if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
+                    fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
                     done = 1
                     with open(glb.grok_fcomm_out_tele, 'w') as f:
                         f.write("")
-                if fcomm_rx.find(glb.grok_fcomm_end) >= 0:
-                    fcomm_rx = fcomm_rx.replace(glb.grok_fcomm_end, '')
+                if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
+                    fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
                     end = 1
                     with open(glb.grok_fcomm_out_tele, 'w') as f:
                         f.write("")
                 if done or end:
                     # not empty message, send it back to user
-                    fcomm_rx = fcomm_rx.strip()
-                    if fcomm_rx:
-                        # parts = split_message(fcomm_rx)
-                        # for part in parts:
-                        #    await update.message.reply_text(part)
-                        reply_file, file_name, brief = text_to_file(fcomm_rx)
-                        if reply_file:
-                            await update.message.reply_document(document=open(reply_file, 'rb'),
-                                                                filename=file_name,
-                                                                caption=brief)
-                        else:
-                            await update.message.reply_text(fcomm_rx)
+                    await general_telegram_send(update, fcomm_tx)
                     if end:
                         grok_handling = 0
                         return
@@ -224,56 +288,62 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # a handler function when telegram bot receives a normal message (not command), 
 # it will reply with the same message content,
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if tackle_non_favored_access(update) == 0:
-        await non_favored_access_reply(update)
-        return
-    global last_chat_id
-    last_chat_id = update.message.chat.id
-    agent = agent_id_name_map.get(int(context.bot.id))
-    if agent:
-        if agent == 'agent00':
-            if not grok_handling:
-                placeholder = await update.message.reply_text("Whassup boss?")
-                await message_handler(update, context)
-                await placeholder.delete()
-            else:
-                await update.message.reply_text("Hold on, I'm handling something for you.")
+    try:
+        if tackle_non_favored_access(update) == 0:
+            await non_favored_access_reply(update)
+            return
+        global last_chat_user, last_chat_group
+        id = update.message.chat.id
+        if id > 0:
+            last_chat_user = id
         else:
-            pass
+            last_chat_group = id
+        agent = agent_id_name_map.get(int(context.bot.id))
+        if agent:
+            if agent == 'agent00':
+                if not grok_handling:
+                    placeholder = await update.message.reply_text("Whassup boss?")
+                    await message_handler(update, context)
+                    await placeholder.delete()
+                else:
+                    await update.message.reply_text("Hold on, I'm handling something for you.")
+            else:
+                pass
+    except Exception as e:
+        print(f"Error in echo handler: {e}")
+        gen.reset_flag = f'Telegram Bot Error {e}'
 
 
 # bot_daemon_send_message:
 # this function is called by the main loop of the agent to send the message in grok
 async def bot_daemon_send_message(context: ContextTypes.DEFAULT_TYPE):
-    msg_sent = 0
-    if not os.path.isfile(glb.grok_fcomm_out_tele_active):
-        return
-    with open(glb.grok_fcomm_out_tele_active, 'r') as f:
-        fcomm_tx = f.read()
-        if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
-            fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
-        if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
-            fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
-        if fcomm_tx.find(glb.grok_fcomm_start) >= 0:
-            fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_start, '')
+    try:
+        fcomm_tx = ""
+        fcomm_file = glb.grok_fcomm_in_tele if grok_handling == 0 else glb.grok_fcomm_out_tele_active
+        if not os.path.isfile(fcomm_file):
+            return
+        done = 0
+        end = 0
+        with open(fcomm_file, 'r') as f:
+            fcomm_tx = f.read()
+            if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
+                fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
+                done = 1
+            if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
+                fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
+                end = 1
             fcomm_tx = fcomm_tx.strip()
-            if fcomm_tx:
-                parts = split_message(fcomm_tx)
-                for part in parts:
-                    if tool_telecom_send_target == 'user':
-                        if last_chat_id:
-                            await context.bot.send_message(chat_id=last_chat_id, text=part)
-                            msg_sent = 1
-                    else:
-                        await context.bot.send_message(chat_id=cfg_telegram['group']['id'], text=part)
-                        msg_sent = 1
-    if msg_sent:
-        with open(glb.grok_fcomm_out_tele_active, 'w') as f:
-            f.write("")
-    global anti_flood_cnt
-    if anti_flood_cnt < 3:
-        anti_flood_cnt += 1
-    return
+        if fcomm_tx and (done or end):
+            await general_telegram_send(context, fcomm_tx)
+            with open(fcomm_file, 'w') as f:
+                f.write("")
+        global anti_flood_cnt
+        if anti_flood_cnt < 3:
+            anti_flood_cnt += 1
+        return
+    except Exception as e:
+        print(f"Error in bot_daemon_send_message: {e}")
+        gen.reset_flag = f'Telegram Bot Error {e}'
 
 
 # bot_daemon:
@@ -292,15 +362,16 @@ def bot_daemon(token: str, bot_name: str):
         token = token.strip()
         app = Application.builder().token(token).build()
         # add handlers for start, help and echo commands
-        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("start", start_command))
         app.add_handler(CommandHandler("help", help_command))
         app.add_handler(CommandHandler("q", quit_command))
         app.add_handler(CommandHandler("r", reset_command))
-        app.add_handler(CommandHandler("m", memory_command))
-        app.add_handler(CommandHandler("cm", clear_command))
-        # app.add_handler(CommandHandler("b", batch_command))
-        # app.add_handler(CommandHandler("c", confirm_command))
-        # app.add_handler(CommandHandler("nc", no_confirm_command))
+        app.add_handler(CommandHandler("ms", memory_save_command))
+        app.add_handler(CommandHandler("mc", memory_clear_command))
+        app.add_handler(CommandHandler("ce", confirm_enable_command))
+        app.add_handler(CommandHandler("cd", confirm_disable_command))
+        app.add_handler(CommandHandler("te", tool_enable_command))
+        app.add_handler(CommandHandler("td", tool_disable_command))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
         # a periodic task to check the message from grok and send it to Telegram if needed, runs every 1 second
         app.job_queue.run_repeating(bot_daemon_send_message, interval=1)
@@ -314,6 +385,7 @@ def bot_daemon(token: str, bot_name: str):
         loop.run_until_complete(_start_bot(token))
     except Exception as e:
         print(f"Agent {bot_name} Error: {e}")
+        gen.reset_flag = f'Telegram Bot Error {e}'
 
 
 # start_telegram_bot:
@@ -347,5 +419,5 @@ def execute_telecom_command(agent_cmd):
     tool_telecom_send_target = target
     with open(glb.grok_fcomm_out_tele_active, 'w') as f:
         f.write(message)
-        f.write('\n' + glb.grok_fcomm_start)
+        f.write('\n' + glb.grok_fcomm_end)
     return "Telecom tool: Successfully sent the message."

@@ -2,7 +2,9 @@ venv/
 .venv/
 .idea/
 __pycache__/
-
+/sandbox
+/debug
+*.bak
 *.reg
 *.json
 *.token
@@ -10,5 +12,4 @@ __pycache__/
 *.log
 *.task
 *.txt
-/sandbox
-/debug
+
