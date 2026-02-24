@@ -27,7 +27,7 @@ import os
 import xml.etree.ElementTree as ET
 import global_cfg as glb
 
-reset_flag = ''
+reset_flag = []
 # pause flag for the daemon, when daemon_pause is 1, the daemon will pause and not execute the
 # tasks, when daemon_pause is 0, the daemon will run normally.
 # need to run daemon before grok get user input, so that the daemon can execute the tasks in
