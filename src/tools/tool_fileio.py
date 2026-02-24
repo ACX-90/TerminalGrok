@@ -20,13 +20,69 @@ Key functions:
 import os
 import sys
 import re
+import global_cfg as glb
+
+# tool_fileio costs approximately 350 tokens when sent to the LLM vendor.
+tool_define_fileio = {
+    "type": "function",
+    "function": {
+        "name": "fileio",
+        "description": (
+            "Perform file read/write operations within the sandbox. "
+            f"Use absolute paths starting with {glb.sandbox}, only operate within this directory and its subdirectories. "
+            "Use this tool for ALL file content changes: create, write, append, delete, "
+            "and line-level edits. Never use the batch tool for any of these operations."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": (
+                        "Use exactly ONE of the following commands with the syntax shown:\n\n"
+                        "write <path> <content>\n"
+                        "  Create or overwrite a file with the given content.\n\n"
+                        "read <path>\n"
+                        "  Read and return the file content. Returns error if file not found.\n\n"
+                        "append <path> <content>\n"
+                        "  Append content to a file. Creates the file if it does not exist.\n\n"
+                        "delete <path>\n"
+                        "  Delete a file. Returns error if file not found.\n\n"
+                        "insert_lines <path> <line_index> <content>\n"
+                        "  Insert one or more lines before the given line index (1-based).\n"
+                        "  After insertion, the new content starts at line_index.\n"
+                        "  Returns error if file not found or line_index is out of range.\n\n"
+                        "delete_lines <path> <line_index> <count>\n"
+                        "  Delete exactly <count> lines starting from line_index (1-based).\n"
+                        "  Returns error if file not found or range is out of bounds.\n\n"
+                        "replace_lines <path> <line_index> <count> <content>\n"
+                        "  Delete <count> lines starting from line_index, then insert <content> "
+                        "at that position. Replacement may have a different line count than <count>.\n"
+                        "  Returns error if file not found or range is out of bounds.\n\n"
+                        "replace_symbol <path> <symbol> <content>\n"
+                        "  Replace all occurrences of <symbol> in the file with <content>. "
+                        "Returns error if file or symbol not found.\n\n"
+                        "Note: <content> is treated as a single argument. "
+                        "Multiple lines of content should be separated by \n"
+                    )
+                }
+            },
+            "required": ["command"]
+        }
+    }
+}
+
+tool_brief_fileio = """File I/O tool for reading, writing, delete files, and remove/insert/replace lines in file, and replace symbols. """
+
+tool_rule_fileio = """All operations must be performed only within the sandbox. NEVER use fileio to modify tasks. """
+
 
 # ================================================================
 # Basic file operations
 # ================================================================
 # path_preprocess
 # preprocess path to make sure it's safe and valid
-def path_preprocess(path):
+def path_preprocess(path: str):
     """Sometimes path may contain \" in the start and end """
     if path.startswith('"') and path.endswith('"'):
         path = path[1:-1]
@@ -35,7 +91,7 @@ def path_preprocess(path):
 # data_preprocess
 # unescape data to make sure it's safe and valid, 
 # for example, replace \\n with \n, \\t with \t and \\\\ with \\
-def data_preprocess(text):
+def data_preprocess(text: str):
     escape_map = {
         '\\\\': '\\',
         '\\n':  '\n',
@@ -219,9 +275,9 @@ def file_replace_symbol(path, symbol, data):
 # ================================================================
 # Agent tool calls
 # ================================================================
-# execute_fileio_command
+# tool_handle_fileio
 # execute fileio command from agent, the command should follow the syntax defined in agent_cfg.py
-def execute_fileio_command(agent_cmd):
+def tool_handle_fileio(agent_cmd):
     if agent_cmd.startswith("write "):
         args = agent_cmd[len("write "):].split(" ", 1)
         return file_write(args[0], args[1])
@@ -248,6 +304,18 @@ def execute_fileio_command(agent_cmd):
         return file_replace_symbol(args[0], args[1], args[2])
     else:
         return f"ERROR: unknown fileio command."
+
+def tool_register():
+    return {
+        "name": "fileio",
+        "description": "File I/O tool for reading, writing, and manipulating files.",
+        "handler": tool_handle_fileio,
+        "definition": tool_define_fileio,
+        "prompt": {
+            "brief": tool_brief_fileio,
+            "rule": tool_rule_fileio
+        }
+    }
 
 # ================================================================
 # Verification of tool calls

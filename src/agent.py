@@ -24,18 +24,19 @@ Author: [Your Name or Placeholder]
 Date: [Current Date or Placeholder]
 """
 import re
+import copy
 import time
 import os
 import json
 import html
 import subprocess
-import agent_cfg as cfg
-import general
-import tool_fileio
-import tool_tasks
-import tool_telecom
 import general as gen
 import global_cfg as glb
+import tool_loader
+
+# =======================================================================================
+# Initialize global variables and configurations
+# =======================================================================================
 
 # use clash as system proxy and it's a socks -> socks5 fix for linux
 # these environment variables must be set before importing openai client,
@@ -49,65 +50,87 @@ from openai import (
     AuthenticationError,
 )
 
+# setup all tools
+tool_loader.load_all_tools()
+tool_def = ""
+tool_brief = ""
+tool_list = []
+current_tools = []
+tool_handler_map = {}
+for name, value in tool_loader.tools.items():
+    brief = value['prompt']['brief']
+    rule = value['prompt']['rule']
+    tool_brief += f"<tool name=\"{name}\"><brief>{brief}</brief></tool>\n"
+    tool_def += f"<tool name=\"{name}\"><brief>{brief}</brief><rule>{rule}</rule></tool>\n"
+    tool_list.append(value['definition'])
+    tool_handler_map.update({name: value['handler']})
+
+# setup agent configuration
+agent_cfg = gen.get_cfg(f"agent")
+
+system_prompt = agent_cfg["system"]
+system_prompt = system_prompt.replace("<OS_TYPE/>", glb.os_type)
+system_prompt = system_prompt.replace("<USER_NAME/>", glb.username)
+system_prompt = system_prompt.replace("<MEMORY/>", glb.memories)
+system_prompt = system_prompt.replace("<SANDBOX_PATH/>", glb.sandbox)
+system_prompt = system_prompt.replace("<TOOLS_DEF/>", tool_def)
+agent_cfg["system"] = system_prompt
+gen.message_init(system_prompt)
+
+tool_router_prompt = agent_cfg["toolRouter"]
+tool_router_prompt = tool_router_prompt.replace("<TOOLS_BRIEF/>", f"<tools>{tool_brief}</tools>")
+agent_cfg["toolRouter"] = tool_router_prompt
+
 # setup openrouter client
 try:
     client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
+        base_url=agent_cfg["vendor"]["url"],
         api_key=glb.grok_token,
     )
 except Exception as e:
     print(f"OpenAI socks fail {e}")
     exit(-1)
 
-# =======================================================================================
-# global controll and status variables
-# =======================================================================================
 
-# get_grok_input_from_file:
+# =======================================================================================
+# functions for agent operation
+# =======================================================================================
+# __get_grok_input_from_file:
 # get input from fcomm file, with start flag, and clear the file after reading
-def get_grok_input_from_file():
+def __get_grok_input_from_file():
     gen.grok_end()
     gen.daemon_pause = 0
     while True:
-        # terminal input or local file input received
-        if os.path.isfile(glb.grok_fcomm_in):
-            with open(glb.grok_fcomm_in, 'r') as f:
+        for filename in glb.grok_fcomm_in_table:
+            if not os.path.isfile(filename):
+                continue
+            with open(filename, 'r') as f:
                 fcomm_rx = f.read()
-                if fcomm_rx.find(glb.grok_fcomm_start) >= 0:
-                    glb.grok_fcomm_in_src = 0
-                    open(glb.grok_fcomm_in, 'w').write('')
-                    break
-        # daemon task input received
-        if os.path.isfile(glb.grok_fcomm_in_task):
-            with open(glb.grok_fcomm_in_task, 'r') as f:
-                fcomm_rx = f.read()
-                if fcomm_rx.find(glb.grok_fcomm_start) >= 0:
-                    open(glb.grok_fcomm_in_task, 'w').write('')
-                    break
-        # telegram or other remote input received
-        if os.path.isfile(glb.grok_fcomm_in_tele):
-            with open(glb.grok_fcomm_in_tele, 'r') as f:
-                fcomm_rx = f.read()
-                if fcomm_rx.find(glb.grok_fcomm_start) >= 0:
+            # find start flag in the file, if found, clear the file and return 
+            # the content after the start flag as user input
+            if fcomm_rx.find(glb.grok_fcomm_start) >= 0:
+                open(filename, 'w').write('')
+                gen.daemon_pause = 1
+                if filename == glb.grok_fcomm_in_tele:
                     glb.grok_fcomm_in_src = 1
-                    open(glb.grok_fcomm_in_tele, 'w').write('')
-                    break
+                elif filename == glb.grok_fcomm_in:
+                    glb.grok_fcomm_in_src = 0
+                return fcomm_rx.replace(glb.grok_fcomm_start, '').strip()
         time.sleep(0.1)
-    gen.daemon_pause = 1
-    return fcomm_rx.replace(glb.grok_fcomm_start, '').strip()
 
-# print_agent_tool:
+# __print_agent_tool:
 # print the tool command and grok's thought, and ask for confirm if needed
 # use lite formatting for reply in mobile terminal like Telegram
-def print_agent_tool(think, command):
+def __print_agent_tool(think, command):
     if not glb.grok_fcomm_remote():
-        gen.myprint("\n" + "="*60)
-        gen.myprint(f"Grok's thought: {think}")
-        gen.myprint("-"*60)
-        gen.myprint("COMMAND TO EXECUTE:")
-        gen.myprint("-"*60)
-        gen.myprint(command)
-        gen.myprint("="*60)
+        print_content = f"\n{"="*60}\n"\
+                        f"Grok's thought: {think}\n"\
+                        f"{'-'*60}\n"\
+                        f"COMMAND TO EXECUTE:\n"\
+                        f"{'-'*60}\n"\
+                        f"{command}\n"\
+                        f"{'='*60}"
+        gen.myprint(print_content)
     else:
         if len(think) > 300:
             gen.myprint(f"<grok_tele_file name=\"grok_thought.txt\">{think}</grok_tele_file>\n")
@@ -126,7 +149,7 @@ def print_welcome():
 # get user input from terminal or file, with grok_use_fileio switch
 def get_user_input():
     if glb.grok_use_fileio:
-        user_input = get_grok_input_from_file() 
+        user_input = __get_grok_input_from_file() 
     else:
         user_input = input()
     print(f"User input: {user_input}")
@@ -151,7 +174,6 @@ def preprocess_user_input(user_input):
     else:
         # use another model to judge whether the user wants to use tools.
         tool_router(user_input)
-
         # save user input to conversation, and save_message for potential saving to mem file
         gen.messages.append({"role":"user", "content": user_input})
         gen.save_message.append(f"<user>{user_input}</user>\n")
@@ -165,7 +187,7 @@ def get_tool_confirm_info():
     confirm = "yes, do it now"
     if glb.confirm_need:
         if glb.grok_use_fileio:
-            confirm_info = get_grok_input_from_file() 
+            confirm_info = __get_grok_input_from_file() 
         else:
             confirm_info = input()
         if not confirm_info or confirm_info.startswith(" "):
@@ -176,17 +198,20 @@ def get_tool_confirm_info():
         confirm_info = confirm
     return confirm_info
 
-
 # tool_router:
 # route the tool call to corresponding tool handler based on tool name
 def tool_router(user_input):
     if not gen.tool_enable_flag:
         return 0
+    global current_tools
     time1 = time.time()
     aux_completion = client.chat.completions.create(
-        model=cfg.aux_model,
-        messages=[cfg.msg_tool_router, {"role": "user", "content": user_input}],
-        temperature=0.0,
+        model=agent_cfg["model"]["aux"],
+        messages=[
+            {"role": "user", "content": agent_cfg["toolRouter"]}, 
+            {"role": "user", "content": user_input}
+            ],
+        temperature=0.2,
     )
     time_elapsed = time.time() - time1
     aux_reply = aux_completion.choices[0].message.content.strip().lower()
@@ -194,24 +219,24 @@ def tool_router(user_input):
     gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
     if aux_reply.lower().find("yes") >= 0:
         gen.tool_used_last_time = 1
-        gen.current_tools = gen.all_avaliable_tools
+        current_tools = tool_list
     else:
         gen.tool_used_last_time = 0
-        gen.current_tools = []
+        current_tools = []
         return 0
 
 # grok_chat:
 # make a chat request to grok, with current messages and tools
 def grok_chat():
     try:
-        tool_choice = "auto" if gen.current_tools else 0
-        temperature = 0.2 if gen.current_tools else 0.7
+        tool_choice = "auto" if current_tools else 0
+        temperature = 0.2 if current_tools else 0.7
         gen.debug_out(f"Grok is thinking, temperature={temperature}, tool_choice={tool_choice}...")
         time1 = time.time()
         completion = client.chat.completions.create(
-            model=cfg.main_model,
+            model=agent_cfg["model"]["main"],
             messages=gen.messages,
-            tools=gen.current_tools,
+            tools=current_tools,
             tool_choice=tool_choice,
             temperature=temperature,
         )
@@ -251,7 +276,7 @@ def tool_preprocess(reply, index=0):
         # save the tool command and thought to save_message for potential saving to mem file, with some
         #  formatting for future use
         gen.save_message.append(f"<assistant>tool={tool_name}, think={agent_think}, cmd=\n{agent_cmd}\n</assistant>\n")
-        print_agent_tool(agent_think, agent_cmd)
+        __print_agent_tool(agent_think, agent_cmd)
         confirm_info = get_tool_confirm_info()
     except Exception as e:
         gen.myprint(f"Error in tool_preprocess: {e}")
@@ -259,50 +284,6 @@ def tool_preprocess(reply, index=0):
         agent_cmd = f"ERROR: Failed to parse tool call. Exception: {e}"
         confirm_info = f"no, exception occurred {e}"
     return confirm_info, agent_cmd
-
-# tool_handle_batch:
-# handle the batch tool call from grok, currently just print the command and thought, and ask for confirm
-def tool_handle_batch(agent_cmd):
-    gen.debug_out("Handling batch tool call...")
-    try:
-        ret = subprocess.run(agent_cmd, text=True, shell=True, capture_output=True)
-        gen.tool_result = f"returncode={ret.returncode}, stdout={ret.stdout}, stderr={ret.stderr}"
-    except Exception as e:
-        gen.tool_result = f"ERROR: Exception occurred while executing batch command. Exception: {e}"
-
-# tool_handle_fileio:
-# handle the fileio tool call from grok, currently just print the command and thought, and ask for confirm,
-def tool_handle_fileio(agent_cmd):
-    gen.debug_out("Handling fileio tool call...")
-    try:
-        gen.tool_result = tool_fileio.execute_fileio_command(agent_cmd)
-    except Exception as e:
-        gen.tool_result = f"ERROR: Exception occurred while executing fileio command. Exception: {e}"
-
-# tool_handle_task:
-# handle the task tool call from grok, currently just print the command and thought, and ask for confirm,
-def tool_handle_task(agent_cmd):
-    gen.debug_out("Handling task tool call...")
-    try:
-        gen.tool_result = tool_tasks.execute_tasks_command(agent_cmd)
-    except Exception as e:
-        gen.tool_result = f"ERROR: Exception occurred while executing task command. Exception: {e}"
-
-# tool_handler_telecom:
-# handle the telecom tool call from grok, currently just print the command and thought, and
-def tool_handle_telecom(agent_cmd):
-    gen.debug_out("Handling telecom tool call...")
-    try:
-        gen.tool_result = tool_telecom.execute_telecom_command(agent_cmd)
-    except Exception as e:
-        gen.tool_result = f"ERROR: Exception occurred while executing telecom command. Exception: {e}"
-
-tool_handler_map = {
-    "batch": tool_handle_batch,
-    "fileio": tool_handle_fileio,
-    "task": tool_handle_task,
-    "telecom": tool_handle_telecom,
-}
 
 # tool_handle:
 # handle the tool calls from grok, currently only print the command and thought, and ask for confirm,
@@ -313,7 +294,7 @@ def tool_handle(reply):
         if tool_handle:
             confirm_info, agent_cmd = tool_preprocess(reply, index)
             if confirm_info.startswith("y"):
-                tool_handle(agent_cmd)
+                gen.tool_result = tool_handle(agent_cmd)
             else:
                 gen.tool_result = f"Tool execution rejected by user, confirm_info: {confirm_info}"
         else:

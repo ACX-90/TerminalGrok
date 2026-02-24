@@ -20,12 +20,12 @@ Design notes:
     encapsulate in an object if concurrent access is required.
 - Keep helpers minimal to avoid extra dependencies and simplify testing.
 """
+# python standard library
 import copy
 import json
 import os
 import xml.etree.ElementTree as ET
 import global_cfg as glb
-import agent_cfg as cfg
 
 reset_flag = ''
 # pause flag for the daemon, when daemon_pause is 1, the daemon will pause and not execute the
@@ -41,19 +41,15 @@ initial = 0
 # the first 2 messages are system messages, which are necessary for grok to work,
 # and should not be removed,
 # the 3rd message is a hello message, which can be removed if user want grok to start with no greeting
-default_message = [
-    cfg.msg_system,       # 0, must be preserved
-]
+default_message = []
 # compress_message is for future use, currently not implemented yet
-compress_message = [
-    
-]
+compress_message = []
 # save_message is the conversation history that will be saved to mem file when user input /m command,
 # it's in plain text format for potential future use, currently it's just a copy of messages with
 # some formatting, but in the future it can be modified to save more info or in a different format
 save_message = []
 # messages is the current conversation history, which will be sent to grok for each chat request,
-messages = copy.deepcopy(default_message)
+messages = []
 # a flag to indicate whether the agent used tool last time, 
 # if yes, the agent will not ask for user input, but directly decide to use tools or not once 
 # again, which can be useful when the agent need to use tools for several times in a row
@@ -66,16 +62,13 @@ tool_result = ""
 # to have a pure chat with grok without tool use
 tool_enable_flag = 1
 
-# tools that the agent can use, 
-# currently only batch tool is implemented,
-# more tools can be added in the future
-all_avaliable_tools = [
-    cfg.tool_batch,
-    cfg.tool_fileio,
-    cfg.tool_task,
-    cfg.tool_telecom,
-]
-current_tools = 0
+
+# message_init:
+# initialize the default_message and messages with the system prompt, which is necessary for grok to work,
+def message_init(system_prompt):
+    global default_message, messages
+    default_message = [{"role": "system", "content": system_prompt}]
+    messages = copy.deepcopy(default_message)
 
 # xml_to_dict:
 # convert xml file to dictionary, the xml file should have a root element, and the root element
@@ -276,13 +269,33 @@ def get_cfg(name: str) -> dict:
     
     cfg = {}
     with open(f"{glb.config_dir}{glb.path_sep}{name}.cfg", 'r') as f:
+        multi_line_flag = 0
+        raw_value = ""
+        tag = ""
         for line in f:
-            line = line.strip()
-            if not line or line.startswith(';'):
-                continue
-            if '=' not in line:
-                continue
-            tag, _, raw_value = line.partition('=')
+            if multi_line_flag:
+                if line.strip().endswith('"'):
+                    line = line.strip()[:-1]
+                    raw_value += line + '\n'
+                    multi_line_flag = 0
+                else:
+                    line = line.strip()
+                    raw_value += line + '\n'
+                    continue
+            else:
+                line = line.strip()
+                if not line or line.startswith(';'):
+                    continue
+                if '=' not in line:
+                    continue
+                tag, _, raw_value = line.partition('=')
+                if raw_value.startswith('"'):
+                    raw_value = raw_value[1:]
+                    if raw_value.endswith('"'):
+                        raw_value = raw_value[:-1]
+                    else:
+                        multi_line_flag = 1
+                        continue
             value = _resolve_value(raw_value, cfg)
             if '_' in tag:
                 tag, subtag = tag.split('_', 1)

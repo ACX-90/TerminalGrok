@@ -28,20 +28,22 @@ To manage conversation length and prevent excessive memory usage, the script tri
 message history, retaining the first message and the latest 95, ensuring the total stays
 at or below 100 messages. This approach maintains context without unbounded growth.
 """
+# python standard library
+import os
 import copy
 import time
+import threading
+
+# project modules
 import global_cfg as glb
 import general as gen
 import agent
-import daemon
-import tool_telecom as telecom
-import threading
 
 # ==============================================================
 # Daemon
 # ==============================================================
-daemon.run_daemon()
-telecom.start_telegram_bot()
+# daemon.run_daemon()
+# telecom.start_telegram_bot()
 
 # ==============================================================
 # The main loop
@@ -60,14 +62,14 @@ def main_loop():
             # the agent used tool last time, let it decide to use tools or not once again. if it still
             #  want to use tools, then handle the tool calls directly without asking for user input
             gen.tool_used_last_time = 0
-            gen.current_tools = gen.all_avaliable_tools
+            agent.current_tools = agent.tool_list
             gen.debug_out(f"SYS: tools activated")
         else:
             gen.debug_out("SYS: Start a new chat round, ask for user input.")
             # when start a new chat, clear tools option, and ask user input
             # or when the agent decide not to use tools, ask for user input to continue the conversation
             gen.tool_used_last_time = 0
-            gen.current_tools = 0
+            agent.current_tools = 0
             user_input = agent.get_user_input()
             # when user input starts with "/", it is a command for the python controller,
             # not a normal conversation input, so handle the command first and get the result,

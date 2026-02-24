@@ -4,8 +4,6 @@ import asyncio
 import json
 import random
 import time
-import general as gen
-import global_cfg as glb
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -14,6 +12,40 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+import global_cfg as glb
+import general as gen
+
+
+# tool_telecom costs approximately 150 tokens when sent to the LLM vendor.
+tool_define_telecom = {
+    "type": "function",
+    "function": {
+        "name": "telecom",
+        "description": (
+            "Send a Telegram message to the user or to a group chat. "
+            "Use this tool to notify the user of task completion, errors, or important information. "
+            "Messages are sent asynchronously and do not block execution."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Use exactly ONE of the following commands with the syntax shown:\n\n"
+                    "<target> <message>\n"
+                    "target: 'user' for direct message, 'group' for group chat.\n"
+                    "message: The message content to send. Use plain text, no HTML or markdown."
+                }
+            },
+            "required": ["command"]
+        }
+    }
+}
+
+tool_brief_telecom = """Send Telegram messages to the user or group chat. """
+
+tool_rule_telecom = """Messages can only send to default users or groups. """
 
 # flag of whether the Telegram bot is handling a message, when grok_handling is 1,
 # it means the bot is handling a message and waiting for the reply from grok, at 
@@ -35,22 +67,13 @@ for name in cfg_telegram:
         agent_id_name_map.update({agent_id: name})
 
 tool_telecom_send_target = 'user'  # or 'group', decide whether to send message to user or group, if user, the bot will reply to the user who sent the message, if group, the bot will send message to the group defined in the configuration file
-last_chat_user = None  # the chat id of the last user who sent a message, used to reply to the user when tool_telecom_send_target is 'user'
-last_chat_group = cfg_telegram['group']['id']  # the chat id of the last message received, used to reply to the user when tool_telecom_send_target is 'user'
+last_chat_user = cfg_telegram['user']['valid_id_1']  # the chat id of the last user who sent a message, used to reply to the user when tool_telecom_send_target is 'user'
+last_chat_group = cfg_telegram['group']['id_1']  # the chat id of the last message received, used to reply to the user when tool_telecom_send_target is 'user'
 
 non_favored_reply_table = [
-    "Fuck you bro!",
-    "Beat it!",
-    "Get lost!",
-    "Scram!",
-    "Take a hike!",
-    "Buzz off!",
-    "Hit the road!",
-    "Piss off!",
-    "Get outta here!",
-    "Back off!",
-    "Shove off!",
-    "Motherfucker!",
+    "Fuck you!", "Beat it!", "Get lost!", "Scram!", "Take a hike!",
+    "Buzz off!", "Hit the road!", "Piss off!", "Get outta here!",
+    "Back off!", "Shove off!", "Motherfucker!",
 ]
 
 # split_message:
@@ -76,30 +99,12 @@ def split_message(text: str, max_length: int = 4096) -> list[str]:
         text = text[split_pos:].lstrip()
     return chunks
 
-# text_to_file:
-# convert too long text to txt file
-def text_to_file(text: str):
-    remote_tx = gen.my_xml_parser(text, "grok_tele_file")
-    return remote_tx
-# if len(text) > 1500:
-#     if not os.path.isdir(f'{glb.workspace}/temp'):
-#         os.makedirs(f'{glb.workspace}/temp')
-#     file_name = f'answer_{int(time.time())}.txt'
-#     reply_file = f'{glb.workspace}/temp/{file_name}'
-#     with open(reply_file, 'w', encoding='utf-8') as f:
-#         f.write(text)
-#     i = text.find(' ', 200)
-#     brief = text[:i] if i != -1 else text
-#     return reply_file, file_name, brief
-# else:
-#     return 0, 0, 0
-
 # general_telegram_send:
 # a general function to send message to Telegram
 async def general_telegram_send(handler, fcomm_tx):
     fcomm_tx = fcomm_tx.strip()
     if fcomm_tx:
-        remote_tx = text_to_file(fcomm_tx)
+        remote_tx = gen.my_xml_parser(fcomm_tx, "grok_tele_file")
     else:
         return
     # reply to the user's message
@@ -146,6 +151,7 @@ async def general_telegram_send(handler, fcomm_tx):
 
 anti_flood_cnt = 0
 async def non_favored_access_reply(update: Update):
+    print(f"Non-favored access attempt detected from chat id: {update.message.chat.id}")
     global anti_flood_cnt
     if anti_flood_cnt > 0:
         if random.randint(0, 3) == 0:
@@ -154,8 +160,9 @@ async def non_favored_access_reply(update: Update):
 
 def tackle_non_favored_access(update: Update):
     access_id = update.message.chat.id
-    if access_id == cfg_telegram['group']['id']:
-        return 1
+    for i in cfg_telegram['group']:
+        if cfg_telegram['group'][i] == access_id:
+            return 1
     for i in cfg_telegram['user']:
         if cfg_telegram['user'][i] == access_id:
             return 2
@@ -311,7 +318,7 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
     except Exception as e:
         print(f"Error in echo handler: {e}")
-        gen.reset_flag = f'Telegram Bot Error {e}'
+        gen.reset_flag.append(f'Telegram Bot Error {e}')
 
 
 # bot_daemon_send_message:
@@ -319,31 +326,35 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def bot_daemon_send_message(context: ContextTypes.DEFAULT_TYPE):
     try:
         fcomm_tx = ""
-        fcomm_file = glb.grok_fcomm_in_tele if grok_handling == 0 else glb.grok_fcomm_out_tele_active
-        if not os.path.isfile(fcomm_file):
-            return
-        done = 0
-        end = 0
-        with open(fcomm_file, 'r') as f:
-            fcomm_tx = f.read()
-            if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
-                fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
-                done = 1
-            if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
-                fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
-                end = 1
-            fcomm_tx = fcomm_tx.strip()
-        if fcomm_tx and (done or end):
-            await general_telegram_send(context, fcomm_tx)
-            with open(fcomm_file, 'w') as f:
-                f.write("")
+        check_list = [glb.grok_fcomm_out_tele, glb.grok_fcomm_out_tele_active]
+        for fcomm_file in check_list:
+            if not os.path.isfile(fcomm_file):
+                continue
+            if grok_handling == 1 and fcomm_file == glb.grok_fcomm_out_tele:
+                continue
+            done = 0
+            end = 0
+            with open(fcomm_file, 'r') as f:
+                fcomm_tx = f.read()
+                if fcomm_tx.find(glb.grok_fcomm_done) >= 0:
+                    with open(fcomm_file, 'w') as f:
+                        f.write("")
+                    fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_done, '')
+                    done = 1
+                if fcomm_tx.find(glb.grok_fcomm_end) >= 0:
+                    with open(fcomm_file, 'w') as f:
+                        f.write("")
+                    fcomm_tx = fcomm_tx.replace(glb.grok_fcomm_end, '')
+                    end = 1
+                fcomm_tx = fcomm_tx.strip()
+            if fcomm_tx and (done or end):
+                await general_telegram_send(context, fcomm_tx)
         global anti_flood_cnt
         if anti_flood_cnt < 3:
             anti_flood_cnt += 1
-        return
     except Exception as e:
         print(f"Error in bot_daemon_send_message: {e}")
-        gen.reset_flag = f'Telegram Bot Error {e}'
+        gen.reset_flag.append(f'Telegram Bot Error {e}')
 
 
 # bot_daemon:
@@ -385,7 +396,7 @@ def bot_daemon(token: str, bot_name: str):
         loop.run_until_complete(_start_bot(token))
     except Exception as e:
         print(f"Agent {bot_name} Error: {e}")
-        gen.reset_flag = f'Telegram Bot Error {e}'
+        gen.reset_flag.append(f'Telegram Bot Error {e}')
 
 
 # start_telegram_bot:
@@ -404,12 +415,12 @@ def start_telegram_bot():
 # ================================================================
 # Agent tool calls
 # ================================================================
-# execute_telecom_command:
+# tool_handle_telecom:
 # an active tool for agent to send message to the last contacted user or the group
-def execute_telecom_command(agent_cmd):
+def tool_handle_telecom(agent_cmd):
     agent_cmd = agent_cmd.strip().split(' ', 1)
     if len(agent_cmd) < 2:
-        return "Invalid command format for tool_telecom_send, must be '<target=user/group> <message>'"
+        return "Invalid command format for tool_telecom_send, must be '<target> <message>'"
     target = agent_cmd[0]
     message = agent_cmd[1]
     target = target.strip().lower()
@@ -421,3 +432,24 @@ def execute_telecom_command(agent_cmd):
         f.write(message)
         f.write('\n' + glb.grok_fcomm_end)
     return "Telecom tool: Successfully sent the message."
+
+def tool_register():
+    start_telegram_bot()
+    return {
+        "name": "telecom",
+        "description": "Telecom tool for sending messages to users or groups.",
+        "handler": tool_handle_telecom,
+        "definition": tool_define_telecom,
+        "prompt": {
+            "brief": tool_brief_telecom,
+            "rule": tool_rule_telecom
+        }
+    }
+
+if __name__ == "__main__":
+    info = tool_register()
+    print(f"Tool Name: {info['name']}")
+    print(f"Description: {info['description']}")
+    print(f"Definition: {json.dumps(info['definition'], indent=2)}")
+    while True:
+        pass

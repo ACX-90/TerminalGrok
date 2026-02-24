@@ -32,6 +32,7 @@ if not exist %workspace%\tokens\agent00.token (
 if not %cd% equ %workspace% (
     xcopy "%~dp0\config\" "%workspace%\config\" /q /y
     xcopy "%~dp0\src\" "%workspace%\src\" /q /y
+    xcopy "%~dp0\src\tools\" "%workspace%\src\tools\" /q /y
     xcopy "%~dp0\*.bat" "%workspace%\" /q /y
 )
 
