@@ -1,4 +1,5 @@
 venv/
+.vscode/
 .venv/
 .idea/
 __pycache__/
@@ -12,4 +13,4 @@ __pycache__/
 *.log
 *.task
 *.txt
-
+test.py
