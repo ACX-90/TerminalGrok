@@ -13,4 +13,4 @@ __pycache__/
 *.log
 *.task
 *.txt
-
+test.py
