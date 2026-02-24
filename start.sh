@@ -42,10 +42,14 @@ if [[ ${PWD} != ${workspace} ]] then
     if [ ! -d "${workspace}/src" ]; then
     	mkdir "${workspace}/src"
     fi
+    if [ ! -d "${workspace}/src/tools" ]; then
+    	mkdir "${workspace}/src/tools"
+    fi
     if [ ! -d "${workspace}/config" ]; then
     	mkdir "${workspace}/config"
     fi
     cp ./src/*.py "${workspace}/src/"
+	cp ./src/tools/*.py "${workspace}/src/tools/"
     cp ./config/*.cfg "${workspace}/config/"
     cp *.sh "${workspace}/"
 fi

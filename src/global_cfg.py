@@ -31,7 +31,7 @@ import sys
 import platform
 
 # Global configuration variables
-global_debug = 0
+global_debug = 1
 # debug mode switch, set to 1 to print debug info
 debug = 1
 # debug json switch, if set to 1, the raw json messages sent to and received from grok will be printed
@@ -47,18 +47,20 @@ confirm_need = 0
 # Notice: these environment variables should be set in the OS before running the program
 # by launching the program by start.bat or start.sh which sets the environment variables, 
 # or by setting the environment variables in the terminal before launching the program
-if global_debug:
-    os.environ['USERNAME'] = "TestUser"
-    os.environ['workspace'] = "E:\\_Workspace\\GitHub\\TerminalGrok"
 
 username = os.getenv('USERNAME')
-os_type = sys.platform.lower()
-workspace = os.getenv('workspace')
+if not username:
+    os.environ['USERNAME'] = "TestUser"
+    username = "TestUser"
 
-if os_type.startswith("win"):
-    path_sep = "\\"
-else:
-    path_sep = "/"
+os_type = sys.platform.lower()
+
+path_sep = "\\" if os_type.startswith("win") else "/"
+
+workspace = os.getenv('workspace')
+if not workspace:
+    os.environ['workspace'] = "E:\\_Workspace\\GitHub\\TerminalGrok"
+    workspace = os.environ['workspace']
     
 # --- Directories ---
 sandbox = f"{workspace}{path_sep}sandbox"
@@ -132,7 +134,7 @@ if not os.path.exists(token_dir):
 # --- Clear FComm files at startup ---
 for fcomm_file in grok_fcomm_in_table:
     if os.path.exists(fcomm_file):
-        with open(grok_fcomm_in, "w") as f:
+        with open(fcomm_file, "w") as f:
             f.write("")
 for fcomm_file in grok_fcomm_out_table:
     if os.path.exists(fcomm_file):
