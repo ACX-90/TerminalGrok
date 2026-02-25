@@ -433,7 +433,7 @@ def tool_handle_telecom(agent_cmd):
         f.write('\n' + glb.grok_fcomm_end)
     return "Telecom tool: Successfully sent the message."
 
-def _tool_register():
+def tool_register():
     start_telegram_bot()
     return {
         "name": "telecom",

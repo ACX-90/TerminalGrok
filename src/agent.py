@@ -38,12 +38,6 @@ import ai
 # =======================================================================================
 # Initialize global variables and configurations
 # =======================================================================================
-
-from openai import (
-    OpenAI,
-    AuthenticationError,
-)
-
 # setup all tools
 tools.load_all_tools()
 tool_def = ""
