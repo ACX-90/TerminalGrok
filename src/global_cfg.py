@@ -39,7 +39,7 @@ debug = 1
 debug_json = 1     
 # grok_use_fileio switch, if set to 1, the agent will get user input from file,
 # and print output to file, which can be used for remote terminal display
-grok_use_fileio = 1   
+grok_use_fileio = 0  
 # confirm_need switch, if set to 1, the agent will ask for user confirm before executing tool command
 confirm_need = 0
 
@@ -47,6 +47,12 @@ confirm_need = 0
 # Notice: these environment variables should be set in the OS before running the program
 # by launching the program by start.bat or start.sh which sets the environment variables, 
 # or by setting the environment variables in the terminal before launching the program
+
+# openrouter: use openai format
+# xai: use xai format
+# others: not supported yet
+ai_vendor = 'xai'
+# ai_vendor = 'openrouter'
 
 username = os.getenv('USERNAME')
 if not username:
@@ -109,7 +115,7 @@ grok_fcomm_out_table = [
 ]
 
 grok_token_file = f"{token_dir}{path_sep}grok.token"
-
+xai_token_file = f"{token_dir}{path_sep}xai.token"
 # --- Communication Protocol Markers ---
 grok_fcomm_done = "<GROK status=done/>"
 grok_fcomm_end = "<GROK status=end/>"

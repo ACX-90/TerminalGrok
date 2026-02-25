@@ -9,7 +9,8 @@ if sys.platform.lower().__contains__("win"):
         "function": {
             "name": "batch",
             "description": (
-                "Execute a READ-ONLY Windows Batch command in the user's terminal. "
+                "Execute a Windows Batch command in the user's terminal. "
+                "**When user require to search or list files in sandbox, must use this tool. **"
                 "Allowed uses: directory listing, reading file content (type), simple checks, "
                 "environment queries, and other non-destructive operations. "
                 "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
@@ -39,7 +40,8 @@ else:
         "function": {
             "name": "batch",
             "description": (
-                "Execute a READ-ONLY bash command in the user's terminal. "
+                "Execute a bash command in the user's terminal. "
+                "**When user require to search or list files in sandbox, must use this tool. **"
                 "Allowed uses: directory listing, reading file content (cat), simple checks, "
                 "environment queries, and other non-destructive operations. "
                 "NEVER use this tool to create, modify, append, overwrite, or delete any file. "
@@ -64,10 +66,11 @@ else:
         }
     }
 
-tool_brief_batch = """Run terminal commands and **all git operations**."""
+tool_brief_batch = """Run terminal commands and **all git operations**. """
 
 tool_rule_batch = """Must only used in sandbox, unless user give you permission to access other directories.
-NEVER use `batch` to create, modify, append, overwrite, or delete any file."""
+NEVER use `batch` to create, modify, append, overwrite, or delete any file.
+Must use this tool for sandbox file seraching and listing. """
 
 # tool_handle_batch:
 # handle the batch tool call from grok, currently just print the command and thought, and ask for confirm

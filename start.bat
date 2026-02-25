@@ -33,6 +33,7 @@ if not %cd% equ %workspace% (
     xcopy "%~dp0\config\" "%workspace%\config\" /q /y
     xcopy "%~dp0\src\" "%workspace%\src\" /q /y
     xcopy "%~dp0\src\tools\" "%workspace%\src\tools\" /q /y
+    xcopy "%~dp0\src\ai\" "%workspace%\src\ai\" /q /y
     xcopy "%~dp0\*.bat" "%workspace%\" /q /y
 )
 
@@ -40,6 +41,7 @@ if not %cd% equ %workspace% (
 if not exist %workspace%\venv (
     py -m venv %workspace%\venv
     %workspace%\venv\Scripts\pip install openai
+    %workspace%\venv\Scripts\pip install xai_sdk
     %workspace%\venv\Scripts\pip install httpx[socks]
     %workspace%\venv\Scripts\pip install python-telegram-bot
     %workspace%\venv\Scripts\pip install python-telegram-bot[job-queue]

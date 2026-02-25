@@ -32,32 +32,26 @@ import html
 import subprocess
 import general as gen
 import global_cfg as glb
-import tool_loader
+import tools
+import ai
 
 # =======================================================================================
 # Initialize global variables and configurations
 # =======================================================================================
 
-# use clash as system proxy and it's a socks -> socks5 fix for linux
-# these environment variables must be set before importing openai client,
-# otherwise the proxy setting will not work
-os.environ['ALL_PROXY'] = 'socks5://127.0.0.1:7890'
-os.environ['all_proxy'] = 'socks5://127.0.0.1:7890'
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
-os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
 from openai import (
     OpenAI,
     AuthenticationError,
 )
 
 # setup all tools
-tool_loader.load_all_tools()
+tools.load_all_tools()
 tool_def = ""
 tool_brief = ""
 tool_list = []
 current_tools = []
 tool_handler_map = {}
-for name, value in tool_loader.tools.items():
+for name, value in tools.tools.items():
     brief = value['prompt']['brief']
     rule = value['prompt']['rule']
     tool_brief += f"<tool name=\"{name}\"><brief>{brief}</brief></tool>\n"
@@ -81,16 +75,8 @@ tool_router_prompt = agent_cfg["toolRouter"]
 tool_router_prompt = tool_router_prompt.replace("<TOOLS_BRIEF/>", f"<tools>{tool_brief}</tools>")
 agent_cfg["toolRouter"] = tool_router_prompt
 
-# setup openrouter client
-try:
-    client = OpenAI(
-        base_url=agent_cfg["vendor"]["url"],
-        api_key=glb.grok_token,
-    )
-except Exception as e:
-    print(f"OpenAI socks fail {e}")
-    exit(-1)
-
+# setup ai
+ai.load_all_components()
 
 # =======================================================================================
 # functions for agent operation
@@ -123,10 +109,11 @@ def __get_grok_input_from_file():
 # use lite formatting for reply in mobile terminal like Telegram
 def __print_agent_tool(think, command):
     if not glb.grok_fcomm_remote():
-        print_content = f"\n{"="*60}\n"\
-                        f"Grok's thought: {think}\n"\
-                        f"{'-'*60}\n"\
-                        f"COMMAND TO EXECUTE:\n"\
+        print_content = f"\n{"="*60}\n"
+        if think:
+            print_content += f"Grok's thought: {think}"\
+                        f"{'-'*60}\n"
+        print_content += f"COMMAND TO EXECUTE:\n"\
                         f"{'-'*60}\n"\
                         f"{command}\n"\
                         f"{'='*60}"
@@ -155,6 +142,33 @@ def get_user_input():
     print(f"User input: {user_input}")
     return user_input
 
+# tool_router:
+# route the tool call to corresponding tool handler based on tool name
+def tool_router(user_input):
+    if not gen.tool_enable_flag:
+        return 0
+    global current_tools
+    time1 = time.time()
+    aux_reply = ai.func(func="chat",
+                        mode = 'aux',
+                        model=agent_cfg["model"]["aux"],
+                        messages=[
+                            {"role": "user", "content": agent_cfg["toolRouter"]}, 
+                            {"role": "user", "content": user_input}
+                        ],
+                        temperature=0.2)
+    aux_reply = aux_reply["content"]
+    time_elapsed = time.time() - time1
+    gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
+    gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
+    if aux_reply.strip().lower().find("yes") >= 0:
+        gen.tool_used_last_time = 1
+        current_tools = tool_list
+    else:
+        gen.tool_used_last_time = 0
+        current_tools = []
+        return 0
+    
 # preprocess_user_input:
 # preprocess user input, return a flag to indicate whether to continue the loop directly
 def preprocess_user_input(user_input):
@@ -198,63 +212,6 @@ def get_tool_confirm_info():
         confirm_info = confirm
     return confirm_info
 
-# tool_router:
-# route the tool call to corresponding tool handler based on tool name
-def tool_router(user_input):
-    if not gen.tool_enable_flag:
-        return 0
-    global current_tools
-    time1 = time.time()
-    aux_completion = client.chat.completions.create(
-        model=agent_cfg["model"]["aux"],
-        messages=[
-            {"role": "user", "content": agent_cfg["toolRouter"]}, 
-            {"role": "user", "content": user_input}
-            ],
-        temperature=0.2,
-    )
-    time_elapsed = time.time() - time1
-    aux_reply = aux_completion.choices[0].message.content.strip().lower()
-    gen.debug_out(f"Tool router auxiliary model latency: {time_elapsed:.2f} seconds")
-    gen.debug_out(f"Tool router auxiliary model reply: {aux_reply}")
-    if aux_reply.lower().find("yes") >= 0:
-        gen.tool_used_last_time = 1
-        current_tools = tool_list
-    else:
-        gen.tool_used_last_time = 0
-        current_tools = []
-        return 0
-
-# grok_chat:
-# make a chat request to grok, with current messages and tools
-def grok_chat():
-    try:
-        tool_choice = "auto" if current_tools else 0
-        temperature = 0.2 if current_tools else 0.7
-        gen.debug_out(f"Grok is thinking, temperature={temperature}, tool_choice={tool_choice}...")
-        time1 = time.time()
-        completion = client.chat.completions.create(
-            model=agent_cfg["model"]["main"],
-            messages=gen.messages,
-            tools=current_tools,
-            tool_choice=tool_choice,
-            temperature=temperature,
-        )
-        time_elapsed = time.time() - time1
-        gen.debug_out(f"Grok response latency: {time_elapsed:.2f} seconds")
-        gen.debug_out('Grok made a repy:')
-    except Exception as e:
-        gen.myprint(e)
-        if isinstance(e, AuthenticationError):
-            gen.myprint("Error: Invalid API KEY")
-            data = "#error: " + glb.grok_token
-            with open(glb.grok_token_file, "w") as f:
-                f.write(data)
-            gen.myprint(f"Please modify {glb.grok_token_file} and reset your API KEY\n")
-        exit(-1)
-    gen.debug_json_out(completion.dict())
-    return completion.choices[0].message
-
 # compress_chat:
 # not implemented yet, just a placeholder for future use
 def compress_chat():
@@ -263,12 +220,12 @@ def compress_chat():
 # tool_preprocess:
 # preprocess the tool call from grok, print the command and thought, and ask for confirm if needed
 # return the confirm info and the command to execute
-def tool_preprocess(reply, index=0):
+def tool_preprocess(reply: dict, index=0):
     try:
-        tool_call = reply.tool_calls[index]
-        tool_name = tool_call.function.name
-        args = json.loads(tool_call.function.arguments)
-        agent_think = reply.reasoning
+        tool_call = reply["tool_calls"][index]
+        tool_name = tool_call["function"]["name"]
+        args = json.loads(tool_call["function"]["arguments"])
+        agent_think = reply["reasoning"]
         agent_cmd = args.get("command")
         # DECODE HTML entities if Grok accidentally encodes them in the command, which should be executed
         # as raw syntax
@@ -280,7 +237,7 @@ def tool_preprocess(reply, index=0):
         confirm_info = get_tool_confirm_info()
     except Exception as e:
         gen.myprint(f"Error in tool_preprocess: {e}")
-        agent_think = reply.reasoning
+        agent_think = reply["reasoning"]
         agent_cmd = f"ERROR: Failed to parse tool call. Exception: {e}"
         confirm_info = f"no, exception occurred {e}"
     return confirm_info, agent_cmd
@@ -289,8 +246,8 @@ def tool_preprocess(reply, index=0):
 # handle the tool calls from grok, currently only print the command and thought, and ask for confirm,
 # then execute the command and return the result to grok, more tools can be added in the future
 def tool_handle(reply):
-    for index, tool_call in enumerate(reply.tool_calls):
-        tool_handle = tool_handler_map.get(tool_call.function.name)
+    for index, tool_call in enumerate(reply["tool_calls"]):
+        tool_handle = tool_handler_map.get(tool_call["function"]["name"])
         if tool_handle:
             confirm_info, agent_cmd = tool_preprocess(reply, index)
             if confirm_info.startswith("y"):
@@ -298,13 +255,13 @@ def tool_handle(reply):
             else:
                 gen.tool_result = f"Tool execution rejected by user, confirm_info: {confirm_info}"
         else:
-            gen.tool_result = f"ERROR: no handler for tool {tool_call.function.name}."
+            gen.tool_result = f"ERROR: no handler for tool {tool_call['function']['name']}."
         if glb.grok_fcomm_remote() and len(gen.tool_result) > 300:
             gen.myprint(f"<grok_tele_file name=\"grok_tool_result.txt\">{gen.tool_result}</grok_tele_file>\n")
         else:
             gen.myprint(gen.tool_result)
         gen.save_message.append(f"<tool_result>{gen.tool_result}</tool_result>\n")
-        new_message = {"role": "tool", "tool_call_id": tool_call.id, "content": gen.tool_result}
+        new_message = {"role": "tool", "tool_call_id": tool_call["id"], "content": gen.tool_result}
         gen.messages.append(new_message)
         gen.debug_json_out(new_message)
         gen.grok_done()
@@ -313,10 +270,44 @@ def tool_handle(reply):
 # handle the normal chat reply from grok, save the content to conversation and print it,
 # with some formatting for potential future use
 def chat_handle(reply):
-    gen.save_message.append(f"<assistant>{reply.content}</assistant>\n")
-    print_content = reply.content.rstrip("\n$")
+    gen.save_message.append(f"<assistant>{reply["content"]}</assistant>\n")
+    print_content = reply["content"].rstrip("\n$")
     if not glb.grok_fcomm_remote():
         gen.myprint(f"{'-'*60}\nGrok: {print_content}", end=f'\n{'-'*60}\n$ ')
     else:
         gen.myprint(f"{print_content}\n$ ")
     gen.grok_done()
+
+# grok_chat:
+# make a chat request to grok, with current messages and tools
+def grok_chat():
+    # try:
+    tool_choice = "auto" if current_tools else "none"
+    temperature = 0.2 if current_tools else 0.7
+    gen.debug_out(f"Grok is thinking, temperature={temperature}, tool_choice={tool_choice}...")
+    time1 = time.time()
+    main_reply = ai.func(func="chat",
+                        mode = 'main',
+                        model=agent_cfg["model"]["main"],
+                        messages=gen.messages,
+                        tools=current_tools,
+                        tool_choice=tool_choice,
+                        temperature=temperature,)
+    time_elapsed = time.time() - time1
+    gen.debug_out(f"Grok response latency: {time_elapsed:.2f} seconds")
+    gen.debug_out('Grok made a repy:')
+
+    gen.messages.append({
+            "role": "assistant", 
+            "content": main_reply["content"],
+            "tool_calls": main_reply["tool_calls"]
+        })
+            
+    # if the reply contains tool calls, handle them first, then send the result back to 
+    # grok and get the next reply, until no more tool calls
+    if main_reply["tool_calls"]:
+        gen.tool_used_last_time = 1
+        tool_handle(main_reply)
+    elif main_reply["content"]:
+        chat_handle(main_reply)
+    return
