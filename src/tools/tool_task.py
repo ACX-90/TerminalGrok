@@ -45,27 +45,28 @@ tool_define_task = {
     "type": "function",
     "function": {
         "name": "task",
-        "description": (
-            "Perform task management operations within the sandbox. "
-            "Tasks are scheduled actions that can be executed after a countdown or at intervals. "
-            "Use this tool for ALL task operations: create, read, update, delete, and list. "
-            "All tasks are in XML format. "
-            "all time units are in seconds. loop is optional, if enable=0, the task will not loop. "
-            "any time interval shorter than 60 seconds will forced to be 60 seconds to prevent abuse. "
-            "remain is the total execution times for the task, when remain is -1, it means infinite loop."
-            "interval is the time between each execution. "
-            "**DO NOT add or delete XML tags, strictly follow the format.** "
-            "Task file format example:\n\n"
-            "<?xml version='1.0' encoding='utf-8'?>"
-            "<task>"
-            "<countdown>60</countdown>"
-            "<action><![CDATA[**prompt for grok of what to do when task activated**]]></action>"
-            "<loop>"
-            "<enable>1</enable>"
-            "<interval>60</interval>"
-            "<remain>5</remain>"
-            "</loop>"
-            "</task>"
+        "description": ("""
+Perform task management operations within the sandbox. 
+Tasks are scheduled actions that can be executed after a countdown or at intervals. 
+Use this tool for ALL task operations: create, read, update, delete, and list. 
+All tasks are in XML format. 
+all time units are in seconds. loop is optional, if enable=0, the task will not loop. 
+any time interval shorter than 60 seconds will forced to be 60 seconds to prevent abuse. 
+remain is the total execution times for the task, when remain is -1, it means infinite loop.
+interval is the time between each execution. 
+**DO NOT add or delete XML tags, strictly follow the format.** 
+Task file format example:\n\n
+<?xml version='1.0' encoding='utf-8'?>
+<task>
+<countdown>60</countdown>
+<action><![CDATA[**prompt for grok of what to do when task activated**]]></action>
+<loop>
+<enable>1</enable>
+<interval>60</interval>
+<remain>5</remain>
+</loop>
+</task>
+"""
         ),
         "parameters": {
             "type": "object",

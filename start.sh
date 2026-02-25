@@ -65,6 +65,7 @@ if [ ! -d "${workspace}/venv" ]; then
     sudo apt install python3.12-venv
     python3.12 -m venv "${workspace}/venv"
     "${workspace}/venv/bin/pip" install "openai"
+    "${workspace}/venv/bin/pip" install "xai_sdk"
     "${workspace}/venv/bin/pip" install "httpx[socks]"
     "${workspace}/venv/bin/pip" install "python-telegram-bot"
     "${workspace}/venv/bin/pip" install "python-telegram-bot[job-queue]"

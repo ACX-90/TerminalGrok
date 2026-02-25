@@ -37,7 +37,11 @@ import threading
 # project modules
 import global_cfg as glb
 import general as gen
-import agent
+import agent as agent
+
+import tools
+import ai
+
 
 # ==============================================================
 # Daemon
@@ -82,18 +86,8 @@ def main_loop():
         # the reply may contain tool calls, if so, handle the tool calls first and get the result,
         # then send the result back to grok and get the next reply,
         # if not, just print the reply content and wait for user input
-        reply = agent.grok_chat()
-        
-        # if the reply contains tool calls, handle them first, 
-        # then send the result back to grok and get the next reply,
-        # until no more tool calls
-        gen.messages.append(reply)
-        if reply.tool_calls:
-            gen.tool_used_last_time = 1
-            agent.tool_handle(reply)
-        elif reply.content:
-            agent.chat_handle(reply)
-        
+        agent.grok_chat()
+
         # avoid conversation too long
         # can be done better by summarizing the conversation, 
         # but currently just keep the latest 100 messages

@@ -104,7 +104,7 @@ def split_message(text: str, max_length: int = 4096) -> list[str]:
 async def general_telegram_send(handler, fcomm_tx):
     fcomm_tx = fcomm_tx.strip()
     if fcomm_tx:
-        remote_tx = gen.my_xml_parser(fcomm_tx, "grok_tele_file")
+        remote_tx = gen.xml_parser(fcomm_tx, "grok_tele_file")
     else:
         return
     # reply to the user's message
@@ -433,7 +433,7 @@ def tool_handle_telecom(agent_cmd):
         f.write('\n' + glb.grok_fcomm_end)
     return "Telecom tool: Successfully sent the message."
 
-def tool_register():
+def _tool_register():
     start_telegram_bot()
     return {
         "name": "telecom",
@@ -445,11 +445,3 @@ def tool_register():
             "rule": tool_rule_telecom
         }
     }
-
-if __name__ == "__main__":
-    info = tool_register()
-    print(f"Tool Name: {info['name']}")
-    print(f"Description: {info['description']}")
-    print(f"Definition: {json.dumps(info['definition'], indent=2)}")
-    while True:
-        pass

@@ -70,6 +70,19 @@ def message_init(system_prompt):
     default_message = [{"role": "system", "content": system_prompt}]
     messages = copy.deepcopy(default_message)
 
+# ai_to_html_reparse
+def ai_to_html_reparse(text):
+    while text.find('***') > -1:
+        text = text.replace("***", "<i><b>", 1)
+        text = text.replace("***", "</b></i>", 1)
+    while text.find('**') > -1:
+        text = text.replace("**", "<b>", 1)
+        text = text.replace("**", "</b>", 1)
+    while text.find('*') > -1:
+        text = text.replace("*", "<i>", 1)
+        text = text.replace("*", "</i>", 1)
+    return text
+
 # xml_to_dict:
 # convert xml file to dictionary, the xml file should have a root element, and the root element
 # can have multiple child elements, the child elements can also have their own child elements, 
