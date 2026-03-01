@@ -12,12 +12,13 @@ export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
 
 # general
+export USERNAME="${USER}"
 export workspace="/home/${USERNAME}/TerminalGrok"
 
 # create workspace
 if [ ! -d "${workspace}" ]; then
     echo "Creating Grok"
-    mkdir "${workspace}"
+    mkdir -p "${workspace}"
 fi
 
 # enter OpenRouter API key for Grok
